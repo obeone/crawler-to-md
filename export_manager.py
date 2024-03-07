@@ -11,6 +11,7 @@ class ExportManager:
         db_manager (DatabaseManager): The DatabaseManager instance to be used for exporting.
         """
         self.db_manager = db_manager
+        self.title = title
         logging.info("ExportManager initialized.")  # Add log message
 
     def _adjust_headers(self, content, level_increment=1):
@@ -44,8 +45,7 @@ class ExportManager:
         Returns:
         str: The concatenated Markdown content.
         """
-        final_content = ""
-        first_file = True
+        final_content = f"# {self.title}\n\n"
         for url, content, metadata in pages:
             filtered_metadata = {k: v for k, v in json.loads(metadata).items() if v is not None}
             
@@ -55,16 +55,11 @@ class ExportManager:
                 metadata_content += f"{key}: {value}\n"
             metadata_content += "-->"
             
-            if first_file:
-                # For the first file, insert metadata before the content
-                final_content += metadata_content + '\n' + content
-                first_file = False
-            else:
-                # Adjust headers for subsequent files and add metadata
-                adjusted_content = self._adjust_headers(content)
-                
-                final_content += '\n\n' + metadata_content + '\n\n' + adjusted_content  # Add a separator and metadata
-                
+            # Adjust headers for subsequent files and add metadata
+            adjusted_content = self._adjust_headers(content)
+            
+            final_content += '\n\n' + metadata_content + '\n\n' + adjusted_content + '\n\n---'  # Add a separator and metadata
+            
         return final_content
 
     def export_to_markdown(self, output_path):
