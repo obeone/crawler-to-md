@@ -1,0 +1,9 @@
+/old
+/old2
+/.venv
+/.history
+/.vscode
+/cache
+/output
+__pycache__
+.git
