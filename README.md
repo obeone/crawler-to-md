@@ -1,4 +1,3 @@
-```markdown:README.md
 # Web Scraper to Markdown
 
 This project is a Python-based web scraper that fetches content from specified URLs and exports the data into Markdown and JSON formats. It's designed to be lightweight and easily extendable.
@@ -62,7 +61,3 @@ Refer to `.gitignore`, `.dockerignore`, and `.cursorignore` for the complete lis
 
 Contributions are welcome! Please feel free to submit a pull request or open an issue for any bugs or feature requests.
 
-## License
-
-This project is open-source and available under the MIT License.
-```
