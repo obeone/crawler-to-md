@@ -42,7 +42,6 @@ jobs:
             ghcr.io/obeone/crawler-to-md:latest
             docker.io/obeoneorg/crawler-to-md:latest
           platforms: linux/amd64,linux/arm64,linux/i386,linux/armhf,linux/armel
-          load: true # Required for signing
 
       - name: Set up cosign
         uses: sigstore/cosign-installer@main
