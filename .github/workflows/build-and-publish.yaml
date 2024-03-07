@@ -33,11 +33,14 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push to GHCR and Docker Hub
-        uses: docker/build-push-action@v2
+        id: build-and-push
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
           push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: |
             ghcr.io/obeone/crawler-to-md:latest
             docker.io/obeoneorg/crawler-to-md:latest
@@ -45,12 +48,11 @@ jobs:
 
       - name: Set up cosign
         uses: sigstore/cosign-installer@main
-        with:
-          cosign-release: 'v1.5.2'
 
       - name: Sign the container image with cosign
         run: |
-          cosign sign ghcr.io/obeone/crawler-to-md:latest
-          cosign sign docker.io/obeoneorg/crawler-to-md:latest
+          cosign sign --yes ghcr.io/obeone/crawler-to-md@${DIGEST}
+          cosign sign --yes docker.io/obeoneorg/crawler-to-md@${DIGEST}
         env:
           COSIGN_EXPERIMENTAL: true
+          DIGEST: ${{ steps.build-and-push.outputs.digest }}
