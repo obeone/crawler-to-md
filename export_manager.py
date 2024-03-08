@@ -51,6 +51,7 @@ class ExportManager:
             
             # Prepare metadata as an HTML comment
             metadata_content = f"<!--\n"
+            metadata_content += f"URL: {url}\n"
             for key, value in filtered_metadata.items():
                 metadata_content += f"{key}: {value}\n"
             metadata_content += "-->"
