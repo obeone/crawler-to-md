@@ -31,7 +31,7 @@ class ParserManager:
             markdown = self._parse_main(element)
         elif element.tag == "code":
             markdown = self._handle_code(element)
-        elif element.tag == "quote" or element.tag == "td":
+        elif element.tag == "quote" or element.tag == "td" or element.tag == "th":
             markdown = self._handle_quote(element)
         elif element.tag in ["head", "p", "list", "item", "ref", "hi", "table", "lb"]:
             markdown = self._element_to_markdown(element, level)
