@@ -35,6 +35,7 @@ jobs:
 
       - name: Build and push to GHCR and Docker Hub
         uses: docker/build-push-action@v5 
+        id: build-and-push
         with:
           context: .
           file: ./Dockerfile
