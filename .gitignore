@@ -7,3 +7,4 @@
 /output
 __pycache__
 .cursorignore
+/test.py
