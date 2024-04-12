@@ -13,13 +13,13 @@ class TqdmHandler(logging.StreamHandler):
             self.handleError(record)
 
 
-def setup_logging():
-    logger = logging.getLogger()  # Obtenir le logger racine
+def setup_logging(log_level: str = "WARN"):
+    logger = logging.getLogger()  # Get the root logger
     handler = TqdmHandler()
     formatter = coloredlogs.ColoredFormatter(
         "%(asctime)s %(hostname)s %(name)s[%(process)d] %(levelname)s %(message)s"
     )
     handler.setFormatter(formatter)
     logger.addHandler(handler)
-    logger.setLevel(logging.WARN)
-    coloredlogs.install(level="WARN", logger=logger)
+    logger.setLevel(log_level)
+    coloredlogs.install(level=log_level, logger=logger)

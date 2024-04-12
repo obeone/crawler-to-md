@@ -134,16 +134,28 @@ class Scraper:
             logger.error(f"Error scraping {url}: {e}")
             return None, None
 
-    def start_scraping(self, url):
+    def start_scraping(self, url=None, urls_list=[]):
         """
         Start the scraping process from the given URL.
         Log the start and end of the scraping process.
 
         Args:
         url (str): The URL to start scraping from.
+        urls_list (list): List of URLs to scrape.
         """
-        logger.info(f"Starting scraping process from {url}")
-        self.db_manager.insert_link(url)
+        # If a URL list is provided, we check if it's valid
+        if urls_list:
+            for url in urls_list:
+                if not self.is_valid_link(url):
+                    logger.warning(f"Skipping invalid URL: {url}")
+                    urls_list.remove(url)
+
+            self.db_manager.insert_link(urls_list)
+
+        elif url:
+            self.db_manager.insert_link(url)
+
+        logger.info(f"Starting scraping process")  
 
         pbar = tqdm(
             total=self.db_manager.get_links_count(),
@@ -177,17 +189,19 @@ class Scraper:
 
                 content, metadata = self.scrape_page(html, url)
                 self.db_manager.insert_page(url, content, json.dumps(metadata))
-                new_links = self.fetch_links(html=html, url=url)
+                if not urls_list:
+                    new_links = self.fetch_links(html=html, url=url)
 
-                real_new_links_count = 0
-                for new_url in new_links:
-                    if self.db_manager.insert_link(new_url):
-                        real_new_links_count += 1
-                        logger.debug(f"Inserted new link {new_url} into the database")
+                    real_new_links_count = 0
+                    for new_url in new_links:
+                        if self.db_manager.insert_link(new_url):
+                            real_new_links_count += 1
+                            logger.debug(f"Inserted new link {new_url} into the database")
+
+                    if real_new_links_count:
+                        pbar.total += real_new_links_count
+                        pbar.refresh()
+
                 self.db_manager.mark_link_visited(url)
-
-                if real_new_links_count:
-                    pbar.total += real_new_links_count
-                    pbar.refresh()
-
+                
         pbar.close()

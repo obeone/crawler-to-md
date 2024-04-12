@@ -2,9 +2,28 @@ import logging  # Add log messages
 from urllib.parse import urlparse, urlunparse
 
 
+def randomstring_to_filename(random_string):
+    """
+    Convert a random string to a valid filename.
+
+    Args:
+    random_string (str): The input random string.
+
+    Returns:
+    str: The converted filename.
+    """
+    # Sanitize characters that are not A-Za-z0-9_-
+    valid_chars = "-_."
+    filename = "".join(c if c.isalnum() or c in valid_chars else "_" if c == " " else "" for c in random_string)
+
+    return filename
+
+
+
+
 def url_to_filename(url):
     """
-    Convert a URL to a valid filename.
+    Convert a URL to a valid filename, ensuring it is a string type to avoid TypeError.
 
     Args:
     url (str): The input URL.
@@ -12,13 +31,18 @@ def url_to_filename(url):
     Returns:
     str: The converted filename.
     """
-    parsed_url = urlparse(url)
-    logging.debug(f"Parsing URL: {url}")  # Add log message
+    # Ensure the URL is a string to prevent TypeError when performing string operations
+    if not isinstance(url, str):
+        raise ValueError("URL must be a string")
 
-    # Combine the network and path without the query or fragment
+    parsed_url = urlparse(url)
+    logging.debug(f"Parsing URL: {url}")  # Log the URL being parsed
+
+    # Combine the network location and path, replacing slashes and periods with underscores
     base_filename = parsed_url.netloc + parsed_url.path
     filename = base_filename.replace("/", "_").replace(".", "_")
-    # Remove redundant underscores (useful if you have '__' in your string)
+
+    # Remove consecutive underscores for a cleaner filename
     filename = "_".join(filter(None, filename.split("_")))
 
     return filename
@@ -57,3 +81,20 @@ def url_dirname(url):
         dirname_url += "/"
 
     return dirname_url
+
+
+# Start Generation Here
+def deduplicate_list(input_list):
+    """
+    Deduplicates a list while preserving the original order of elements.
+
+    Args:
+    input_list (list): The input list to be deduplicated.
+
+    Returns:
+    list: The deduplicated list.
+    """
+    seen = set()
+    deduplicated_list = [x for x in input_list if not (x in seen or seen.add(x))]
+    return deduplicated_list
+

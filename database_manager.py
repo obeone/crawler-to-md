@@ -55,20 +55,31 @@ class DatabaseManager:
         Insert a new link into the 'links' table if it does not exist.
 
         Args:
-        url (str): The URL of the link.
+        url (str | List[str]): The URL or list of URLs of the link(s).
         visited (bool): The status of the link (default is False).
 
         Returns:
         bool: True if the link is inserted, False if it already exists.
         """
-        with self.conn:
-            logger.debug(f"Inserting a new link with URL: {url}")
+        if isinstance(url, str):
+            urls = [url]
+        elif isinstance(url, list):
+            urls = url
+        else:
+            raise ValueError("URL must be a string or a list of strings")
 
-            cur = self.conn.execute(
-                "INSERT OR IGNORE INTO links (url, visited) VALUES (?, ?)",
-                (url, visited),
-            )
-            return cur.rowcount > 0
+        count = 0
+        with self.conn:
+            for link in urls:
+                logger.debug(f"Inserting a new link with URL: {link}")
+                cur = self.conn.execute(
+                    "INSERT OR IGNORE INTO links (url, visited) VALUES (?, ?)",
+                    (link, visited),
+                )
+                if cur.rowcount > 0:
+                    count += 1
+                    
+            return count > 0
 
     def mark_link_visited(self, url):
         """
