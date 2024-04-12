@@ -44,17 +44,11 @@ COPY --from=builder /app/packages /app/packages
 RUN --mount=type=cache,target=/var/cache/apt,id=apt-cache-${TARGETPLATFORM} \
     --mount=type=cache,target=/var/lib/apt,id=apt-lib-${TARGETPLATFORM} \
     apt-get update && \
-    apt-get install -y libxml2 libxslt1.1
+    apt-get install -y libxml2 libxslt1.1 libtk8.6
 
 WORKDIR /app
 
 ENV PYTHONPATH=/app/packages:$PYTHONPATH
-
-COPY requirements.txt .
-
-# Install dependencies from requirements.txt using pip and cache
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -r requirements.txt
 
 # Copy the rest of the application's source code into the working directory
 COPY . .
