@@ -61,10 +61,6 @@ docker build -t crawler-to-md .
 docker run --rm -v $(pwd)/output:/app/output crawler-to-md --url <URL>
 ```
 
-## Ignored Files
-
-`.gitignore`, `.dockerignore`, and `.cursorignore` help keep the workspace clean.
-
 ## Contributing
 
 Contributions are welcome! Feel free to submit pull requests or open issues.
