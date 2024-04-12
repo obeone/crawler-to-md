@@ -1,5 +1,5 @@
-requests==2.31.0
-beautifulsoup4==4.12.3
-trafilatura==1.7.0
-coloredlogs==15.0.1
-tqdm==4.66.2
+beautifulsoup4==4.12.3                                                                                                           
+coloredlogs==15.0.1                                                                                                              
+requests==2.31.0                                                                                                                 
+tqdm==4.66.2                                                                                                                     
+trafilatura==1.8.1
