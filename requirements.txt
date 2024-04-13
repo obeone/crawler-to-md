@@ -3,4 +3,3 @@ coloredlogs==15.0.1
 requests==2.31.0                                                                                                                 
 tqdm==4.66.2                                                                                                                     
 trafilatura==1.8.1
-lxml==5.1.0

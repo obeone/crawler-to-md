@@ -1,121 +1,60 @@
 name: Build and Push Docker image
 
-# Trigger the workflow on push events to the main branch.
 on:
   push:
     branches:
       - main
 
 jobs:
-  # Job for building wheels for the lxml package.
-  build-wheel:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.12'
-        
-    # Extract the version of lxml from requirements.txt and hash it for cache key generation.
-    - name: Extract hashed lxml version
-      id: lxml-version
-      run: echo "::set-output name=lxml_line::$(grep 'lxml' requirements.txt | sha256sum | cut -d ' ' -f 1)"
-    
-    # Cache lxml wheels based on the hashed version to speed up builds.
-    - name: Cache lxml wheels
-      id: cache-lxml
-      uses: actions/cache@v2
-      with:
-        path: .wheels
-        key: ${{ runner.arch }}-lxml-${{ steps.lxml-version.outputs.lxml_line }}
-        
-    # Check if the lxml wheel is already cached to avoid unnecessary builds.
-    - name: Check if lxml wheel is cached
-      id: check-wheel
-      run: |
-        if [ -f ".wheels/lxml*.whl" ]; then
-          echo "Wheel found in cache."
-          echo "::set-output name=wheel_exists::true"
-        else
-          echo "Wheel not found, need to build."
-          echo "::set-output name=wheel_exists::false"
-          
-    # Build lxml wheel if it is not found in the cache.
-    - name: Build lxml wheel if not cached
-      if: steps.check-wheel.outputs.wheel_exists == 'false'
-      run: pip wheel lxml -w .wheels
-
-  # Job for building and pushing the Docker image to Docker registries.
   build-and-push:
-    needs: build-wheel
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-      id-token: write
+      id-token: write # For cosign
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      - name: Checkout code
+        uses: actions/checkout@v4 
 
-    # Extract the version of lxml from requirements.txt and hash it for cache key generation.
-    - name: Extract hashed lxml version
-      id: lxml-version
-      run: echo "::set-output name=lxml_line::$(grep 'lxml' requirements.txt | sha256sum | cut -d ' ' -f 1)"
-    
-    # Cache lxml wheels based on the hashed version to speed up builds.
-    - name: Cache lxml wheels
-      id: cache-lxml
-      uses: actions/cache@v2
-      with:
-        path: .wheels
-        key: ${{ runner.arch }}-lxml-${{ steps.lxml-version.outputs.lxml_line }}
-        
-      
-    # Login to GitHub Container Registry.
-    - name: Log in to GitHub Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-        
-    # Login to Docker Hub.
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-        
-    # Build and push the Docker image to both GitHub Container Registry and Docker Hub.
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      id: build-and-push
-      with:
-        context: .
-        file: ./Dockerfile
-        push: true
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-        tags: |
-          ghcr.io/obeone/crawler-to-md:latest
-          docker.io/obeoneorg/crawler-to-md:latest
-        platforms: linux/amd64,linux/arm64,linux/i386,linux/armhf,linux/armel
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3 
 
-    # Set up cosign for signing the container image.
-    - name: Set up cosign for image signing
-      uses: sigstore/cosign-installer@v3
-      
-    # Sign the container image using cosign.
-    - name: Sign the container image
-      run: |
-        cosign sign --yes ghcr.io/obeone/crawler-to-md@${DIGEST}
-        cosign sign --yes docker.io/obeoneorg/crawler-to-md@${DIGEST}
-      env:
-        COSIGN_EXPERIMENTAL: True
-        DIGEST: ${{ steps.build-and-push.outputs.digest }}
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3 
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push to GHCR and Docker Hub
+        uses: docker/build-push-action@v5 
+        id: build-and-push
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ghcr.io/obeone/crawler-to-md:latest
+            docker.io/obeoneorg/crawler-to-md:latest
+          platforms: linux/amd64,linux/arm64,linux/i386,linux/armhf,linux/armel
+
+      - name: Set up cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign the container image with cosign
+        run: |
+          cosign sign --yes ghcr.io/obeone/crawler-to-md@${DIGEST}
+          cosign sign --yes docker.io/obeoneorg/crawler-to-md@${DIGEST}
+        env:
+          COSIGN_EXPERIMENTAL: true
+          DIGEST: ${{ steps.build-and-push.outputs.digest }}
+
