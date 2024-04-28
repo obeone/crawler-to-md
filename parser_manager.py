@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 class ParserManager:
     """
     Manages the conversion of XML documents to Markdown format, supporting <quote> and <code> elements
-    and now handling nested elements like lists within lists more accurately.
+    and now handling nested elements like lists within lists more accurately, including paragraphs within table cells.
     """
 
     def __init__(self, xml_string: str) -> None:
@@ -54,15 +54,11 @@ class ParserManager:
         return "\n".join([self._parse_element(child) for child in element])
 
     def _handle_code(self, element: ET.Element) -> str:
-        # Check if the code element is used inline or requires a block.
-        # This is a simplified approach; you might need a more robust way to detect the context.
-        text = "".join(element.itertext())  # This ensures all nested text is captured.
-        if (
-            "\n" in text or len(text) > 80
-        ):  # Arbitrary length to decide if it should be a block
-            return f"```\n{text}\n```\n"  # Code block formatting
+        text = "".join(element.itertext())
+        if "\n" in text or len(text) > 80:
+            return f"```\n{text}\n```\n"
         else:
-            return f" `{text}`"  # Inline code formatting
+            return f" `{text}`"
 
     def _handle_quote(self, element: ET.Element) -> str:
         return f"> {element.text}\n"
@@ -80,23 +76,20 @@ class ParserManager:
             content = "".join(filter(None, content_parts)).strip()
             markdown = f"{self._process_text(content)}\n\n"
         elif element.tag == "list":
-            # Ajoute un retour à la ligne avant les listes imbriquées
             prefix = "\n" if level > 0 else ""
-            markdown_items = [
-                self._parse_element(child, level + 1) for child in element
-            ]
+            markdown_items = [self._parse_element(child, level + 1) for child in element]
             markdown = prefix + "\n".join(markdown_items) + "\n"
         elif element.tag == "item":
             content_parts = [self._process_text(element.text)]
             content_parts.extend(self._parse_element(child, level) for child in element)
             content = "".join(filter(None, content_parts)).strip()
-            indent = "  " * (level - 1)  # Ajuste l'indentation pour l'imbrication
+            indent = "  " * (level - 1)
             markdown = f"{indent}- {content}\n"
         elif element.tag == "ref":
             text = self._process_text(element.text)
             markdown = f"[{text}]({element.get('target', '')})"
             if markdown and not markdown.startswith(" "):
-                markdown = " " + markdown  # Ensure space before links
+                markdown = " " + markdown
         elif element.tag == "hi":
             markdown = f"**{''.join(element.itertext())}**"
         elif element.tag == "lb":
@@ -115,43 +108,44 @@ class ParserManager:
         header_row_processed = False
         for row in table:
             row_cells = []
-            is_header_row = all(
-                cell.get("role") == "head" for cell in row if cell.tag == "cell"
-            )
+            is_header_row = all(cell.get("role") == "head" for cell in row if cell.tag == "cell")
 
             for cell in row:
                 if cell.tag == "cell":
-                    cell_content = self._process_text("".join(cell.itertext())).strip()
+                    code_elements = cell.findall('.//code')
+                    if code_elements:
+                        cell_content = " ".join([f"`{self._process_text(' '.join(code.itertext())).strip()}`" for code in code_elements])
+                    else:
+                        paragraphs = cell.findall('div')
+                        if paragraphs:
+                            cell_content = " ".join([self._process_text(" ".join(p.itertext())).strip() for p in paragraphs])
+                        else:
+                            cell_content = self._process_text(" ".join(cell.itertext())).strip().replace("\n", " ")
                     row_cells.append(cell_content)
 
             if is_header_row and not header_row_processed:
                 markdown += "| " + " | ".join(row_cells) + " |\n"
-                markdown += "| " + " | ".join(["---"] * len(row_cells)) + " |\n"
+                markdown += "|---" * len(row_cells) + "|\n"
                 header_row_processed = True
             else:
                 markdown += "| " + " | ".join(row_cells) + " |\n"
 
-        return markdown
-
+        return markdown.strip()
     def _log_unknown_element(self, element: ET.Element) -> None:
         logger.warning(f"Unknown XML element encountered: <{element.tag}>")
 
     def _split_line(self, line):
         MAX_LENGTH = 80
-        parts = re.split(
-            r"(\*\*.*?\*\*|\[.*?\]\(.*?\))", line
-        )  # Utilisez un raw string
+        parts = re.split(r"(\*\*.*?\*\*|\[.*?\]\(.*?\))", line)
         new_lines = []
         current_line = ""
 
         for part in parts:
             if not part:
                 continue
-            if re.match(r"\*\*.*?\*\*|\[.*?\]\(.*?\)", part):  # Utilisez un raw string
+            if re.match(r"\*\*.*?\*\*|\[.*?\]\(.*?\)", part):
                 if len(current_line) + len(part) > MAX_LENGTH:
-                    new_lines.append(
-                        current_line.rstrip()
-                    )  # Supprimez les espaces de fin
+                    new_lines.append(current_line.rstrip())
                     current_line = part
                 else:
                     current_line += part
@@ -159,9 +153,7 @@ class ParserManager:
                 words = part.split(" ")
                 for word in words:
                     if len(current_line) + len(word) + 1 > MAX_LENGTH:
-                        new_lines.append(
-                            current_line.rstrip()
-                        )  # Supprimez les espaces de fin
+                        new_lines.append(current_line.rstrip())
                         current_line = word
                     else:
                         if current_line:
@@ -169,7 +161,7 @@ class ParserManager:
                         else:
                             current_line = word
         if current_line:
-            new_lines.append(current_line.rstrip())  # Supprimez les espaces de fin
+            new_lines.append(current_line.rstrip())
 
         return new_lines
 
@@ -177,24 +169,25 @@ class ParserManager:
         lines = md_text.split("\n")
         new_md_text = []
         previous_line_was_list = False
+        inside_table = False
 
         for line in lines:
-            if len(line) > 80:
+            if line.strip().startswith("|"):
+                inside_table = True
+            elif line.strip() == "":
+                inside_table = False
+
+            if len(line) > 80 and not inside_table:
                 reformatted_lines = self._split_line(line)
                 for reformatted_line in reformatted_lines:
-                    # Insérez une ligne vide avant un nouvel élément de liste si nécessaire
-                    if (
-                        reformatted_line.strip().startswith("-")
-                        and previous_line_was_list
-                    ):
+                    if reformatted_line.strip().startswith("-") and previous_line_was_list:
                         new_md_text.append("")
                     new_md_text.append(reformatted_line)
                     previous_line_was_list = reformatted_line.strip().startswith("-")
             else:
-                # Insérez une ligne vide avant un nouvel élément de liste si nécessaire
                 if line.strip().startswith("-") and previous_line_was_list:
                     new_md_text.append("")
-                new_md_text.append(line.rstrip())  # Supprimez les espaces de fin
+                new_md_text.append(line.rstrip())
                 previous_line_was_list = line.strip().startswith("-")
 
         return "\n".join(new_md_text)
