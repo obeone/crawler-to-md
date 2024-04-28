@@ -45,6 +45,7 @@ python main.py --url <URL> [--output-folder ./output] [--cache-folder ./cache] [
 ```
 
 Options:
+
 - `--url`: The starting URL. 🌍
 - `--urls-file`: Path to a file containing URLs to scrape, one URL per line. If '-', read from stdin. 📁
 - `--output-folder`: Where to save Markdown files (default: `./output`). 📂
