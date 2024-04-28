@@ -136,27 +136,31 @@ class Scraper:
 
     def start_scraping(self, url=None, urls_list=[]):
         """
-        Start the scraping process from the given URL.
-        Log the start and end of the scraping process.
+        Initiates the scraping process for a single URL or a list of URLs. It validates URLs,
+        logs the scraping process, and manages the progress of scraping through the database.
 
         Args:
-        url (str): The URL to start scraping from.
-        urls_list (list): List of URLs to scrape.
+            url (str, optional): A single URL to start scraping from. Defaults to None.
+            urls_list (list, optional): A list of URLs to scrape. Defaults to an empty list.
         """
-        # If a URL list is provided, we check if it's valid
+        # Validate and insert the provided URLs into the database
         if urls_list:
+            # Iterate through the list to check for valid URLs
             for url in urls_list:
                 if not self.is_valid_link(url):
                     logger.warning(f"Skipping invalid URL: {url}")
-                    urls_list.remove(url)
+                    urls_list.remove(url)  # Remove invalid URLs from the list
 
+            # Insert the validated list of URLs into the database
             self.db_manager.insert_link(urls_list)
-
         elif url:
+            # Insert a single URL if provided and valid
             self.db_manager.insert_link(url)
 
-        logger.info(f"Starting scraping process")  
+        # Log the start of the scraping process
+        logger.info("Starting scraping process")
 
+        # Initialize a progress bar to track scraping progress
         pbar = tqdm(
             total=self.db_manager.get_links_count(),
             initial=self.db_manager.get_visited_links_count(),
@@ -164,44 +168,61 @@ class Scraper:
             unit="link",
         )
 
+        # Begin the scraping loop
         while True:
+            # Fetch a list of unvisited links from the database
             unvisited_links = self.db_manager.get_unvisited_links()
 
+            # Exit the loop if there are no more links to visit
             if not unvisited_links:
                 logger.info("No more links to visit. Exiting.")
                 break
-            for link in unvisited_links:
-                pbar.update(1)
-                url = link[0]
 
+            # Process each unvisited link
+            for link in unvisited_links:
+                pbar.update(1)  # Update the progress bar
+                url = link[0]  # Extract the URL from the link tuple
+
+                # Attempt to fetch the page content
                 response = requests.get(url)
 
+                # Check for a successful response and correct content type
                 if response.status_code != 200 or not response.headers.get(
                     "content-type", ""
                 ).startswith("text/html"):
+                    # Mark the link as visited and log the reason for skipping
                     self.db_manager.mark_link_visited(url)
                     logger.info(
                         f"Skipping link {url} due to invalid status code or content type"
                     )
                     continue
 
+                # Extract the HTML content from the response
                 html = response.content
 
+                # Scrape the page for content and metadata
                 content, metadata = self.scrape_page(html, url)
+                # Insert the scraped data into the database
                 self.db_manager.insert_page(url, content, json.dumps(metadata))
+
+                # Fetch and insert new links found on the page, if not working from a predefined list
                 if not urls_list:
                     new_links = self.fetch_links(html=html, url=url)
 
+                    # Count and insert new links into the database
                     real_new_links_count = 0
                     for new_url in new_links:
                         if self.db_manager.insert_link(new_url):
                             real_new_links_count += 1
                             logger.debug(f"Inserted new link {new_url} into the database")
 
+                    # Update the progress bar total with the count of new links
                     if real_new_links_count:
                         pbar.total += real_new_links_count
                         pbar.refresh()
 
+                # Mark the current link as visited in the database
                 self.db_manager.mark_link_visited(url)
-                
+
+        # Close the progress bar upon completion of the scraping process
         pbar.close()
