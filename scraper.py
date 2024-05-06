@@ -41,7 +41,7 @@ class Scraper:
         bool: True if the link is valid, False otherwise.
         """
         valid = True
-        if not link.startswith(self.base_url):
+        if self.base_url and not link.startswith(self.base_url):
             valid = False
         for pattern in self.exclude_patterns:
             if pattern in link:
