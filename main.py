@@ -67,7 +67,8 @@ def main():
 
     # If no base url, set it to the url base
     if not args.base_url:
-        args.base_url = utils.url_dirname(args.url if args.url else urls_list[0])
+        if not args.urls_file:
+            args.base_url = utils.url_dirname(args.url if args.url else urls_list[0])
         logger.debug(f"No base URL provided. Setting base URL to {args.base_url}")
 
     # If no title, set it to the url base
