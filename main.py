@@ -123,4 +123,10 @@ def main():
 
 
 if __name__ == "__main__":
+    try:
+        import argcomplete
+        argcomplete.autocomplete(parser)
+    except ImportError:
+        pass
+
     main()
