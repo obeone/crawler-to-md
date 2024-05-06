@@ -116,6 +116,10 @@ def main():
     logger.info("Export to markdown completed.")
     export_manager.export_to_json(os.path.join(output, f"{output_name}.json"))
     logger.info("Export to JSON completed.")
+    markdown_path = os.path.join(output, f"{output_name}.md")
+    json_path = os.path.join(output, f"{output_name}.json")
+    logger.info(f"Markdown file generated at: {markdown_path}")
+    logger.info(f"JSON file generated at: {json_path}")
 
 
 if __name__ == "__main__":
