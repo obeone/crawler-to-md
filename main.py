@@ -32,6 +32,12 @@ def main():
     parser.add_argument("--title", "-t", help="Final title of the markdown file. Defaults to the URL")
     parser.add_argument("--exclude", "-e", action="append", help="Exclude URLs containing this string", default=[])
     
+    try:
+        import argcomplete
+        argcomplete.autocomplete(parser)
+    except ImportError:
+        pass
+    
     args = parser.parse_args()
     logger.debug(f"Command line arguments parsed: {args}")
 
@@ -102,14 +108,8 @@ def main():
     markdown_path = os.path.join(output, f"{output_name}.md")
     json_path = os.path.join(output, f"{output_name}.json")
     logger.info(f"Markdown file generated at: {markdown_path}")
-    logger.info(f"JSON file generated at: {json_path}"
+    logger.info(f"JSON file generated at: {json_path}")
 
 
 if __name__ == "__main__":
-    try:
-        import argcomplete
-        argcomplete.autocomplete(parser)
-    except ImportError:
-        pass
-
     main()
