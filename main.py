@@ -107,8 +107,8 @@ def main():
     
     markdown_path = os.path.join(output, f"{output_name}.md")
     json_path = os.path.join(output, f"{output_name}.json")
-    logger.info(f"Markdown file generated at: {markdown_path}")
-    logger.info(f"JSON file generated at: {json_path}")
+    print(f"\033[94m Markdown file generated at: \033[0m", markdown_path)
+    print(f"\033[92m JSON file generated at: \033[0m", json_path)
 
 
 if __name__ == "__main__":
