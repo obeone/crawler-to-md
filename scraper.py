@@ -3,9 +3,9 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urldefrag
 import logging
 import trafilatura
+import mdformat
 import json
 from database_manager import DatabaseManager
-from parser_manager import ParserManager
 from tqdm import tqdm
 import coloredlogs
 
@@ -109,10 +109,10 @@ class Scraper:
 
         try:
             metadata = trafilatura.metadata.extract_metadata(html, url).as_dict()
-            xml = (
+            markdown = (
                 trafilatura.extract(
                     html,
-                    output_format="xml",
+                    output_format="markdown",
                     include_formatting=True,
                     include_links=True,
                     include_tables=True,
@@ -121,14 +121,8 @@ class Scraper:
                 or ""
             )
 
-            if xml:
-                parser = ParserManager(xml)
-                content = parser.parse()
-            else:
-                content = None
-
             logger.debug(f"Successfully scraped content and metadata from {url}")
-            return content, metadata
+            return markdown, metadata
 
         except Exception as e:
             logger.error(f"Error scraping {url}: {e}")
