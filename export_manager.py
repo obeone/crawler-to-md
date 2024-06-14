@@ -1,6 +1,7 @@
 import json
 from database_manager import DatabaseManager
 import logging  # Add log messages
+import re
 
 
 class ExportManager:
@@ -32,9 +33,28 @@ class ExportManager:
             if line.startswith("#"):
                 hashes = len(line.split(" ")[0])
                 new_hashes = min(hashes + level_increment, 6)  # Limit to ######
-                line = "#" * new_hashes + line[hashes:]
+                line = "\n" + "#" * new_hashes + line[hashes:] + "\n"
             new_content += line + "\n"
         return new_content
+
+    def _cleanup_markdown(self, content):
+        """
+        Remove excessive newline characters from Markdown content.
+
+        This method replaces sequences of three or more consecutive newline characters
+        with exactly two newline characters, ensuring that there are no unnecessary
+        blank lines in the output.
+
+        Args:
+            content (str): The Markdown content to be cleaned up.
+
+        Returns:
+            str: The cleaned-up Markdown content with reduced newline characters.
+        """
+        while "\n\n\n" in content:
+            content = content.replace("\n\n\n", "\n\n")
+        return content
+
 
     def _concatenate_markdown(self, pages):
         """
@@ -46,7 +66,7 @@ class ExportManager:
         Returns:
         str: The concatenated Markdown content.
         """
-        final_content = f"# {self.title}\n\n"
+        final_content = f"# {self.title}\n"
         for url, content, metadata in pages:
             if content is None:
                 continue  # Skip empty pages
@@ -56,7 +76,7 @@ class ExportManager:
             }
 
             # Prepare metadata as an HTML comment
-            metadata_content = f"<!--\n"
+            metadata_content = "<!--\n"
             metadata_content += f"URL: {url}\n"
             for key, value in filtered_metadata.items():
                 metadata_content += f"{key}: {value}\n"
@@ -66,8 +86,10 @@ class ExportManager:
             adjusted_content = self._adjust_headers(content)
 
             final_content += (
-                "\n\n" + metadata_content + "\n\n" + adjusted_content + "\n\n---"
+                "\n" + metadata_content + "\n\n" + adjusted_content + "\n---"
             )  # Add a separator and metadata
+            
+            final_content = self._cleanup_markdown(final_content)
 
         return final_content
 
@@ -99,6 +121,8 @@ class ExportManager:
             for url, content, metadata in pages:
                 if content is None:
                     continue  # Skip empty pages
+
+                content = self._cleanup_markdown(content)
 
                 filtered_metadata = {
                     k: v for k, v in json.loads(metadata).items() if v is not None
