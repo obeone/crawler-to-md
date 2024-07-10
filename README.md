@@ -4,10 +4,10 @@ This Python-based web scraper fetches content from URLs and exports it into Mark
 
 ## 🚀 Quick Start
 
-(Or even better, [use Docker!](#-docker-support) 🐳)
+(Or even better, **[use Docker!](#-docker-support) 🐳**)
 
 ```shell
-git clone https://github.com/your-repo/crawler-to-md.git
+git clone https://github.com/obeone/crawler-to-md.git
 cd crawler-to-md
 pip install -r requirements.txt
 
