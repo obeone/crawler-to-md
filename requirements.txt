@@ -1,6 +1,6 @@
 beautifulsoup4==4.12.3                                                                                                           
 coloredlogs==15.0.1                                                                                                                               
-tqdm==4.66.4    
+tqdm==4.66.5    
 requests==2.32.3  
 trafilatura==1.10.0
 mdformat==0.7.17
