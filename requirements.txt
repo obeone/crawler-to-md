@@ -7,4 +7,4 @@ mdformat==0.7.17
 mdformat-gfm==0.3.6
 mdformat_footnote==0.1.1
 mdformat_frontmatter==2.0.8
-mdformat_tables==0.4.1
+mdformat_tables==1.0.0
