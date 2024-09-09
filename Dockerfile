@@ -1,7 +1,7 @@
 # Use Dockerfile syntax version 1.5 for compatibility and new features
 # syntax=docker/dockerfile:1.5
 
-FROM python:3.12 as builder
+FROM python:3.12.6 as builder
 
 # Set non-interactive mode
 ENV DEBIAN_FRONTEND=noninteractive
@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements.txt -t packages
 
 # Start from a slim Python 3.12 image for a small final image size
-FROM python:3.12-slim as final
+FROM python:3.12.6-slim as final
 
 # Set non-interactive mode
 ENV DEBIAN_FRONTEND=noninteractive
