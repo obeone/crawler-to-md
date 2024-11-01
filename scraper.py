@@ -1,3 +1,4 @@
+import html2text
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urldefrag
@@ -8,6 +9,7 @@ import json
 from database_manager import DatabaseManager
 from tqdm import tqdm
 import coloredlogs
+import re
 
 
 logger = logging.getLogger(__name__)
@@ -93,6 +95,21 @@ class Scraper:
             logger.error(f"Error fetching {url}: {e}")
             return []
 
+    def replace_code_tags(self, text):
+        # Replace [code] and [/code] with triple backticks, adding newlines before and after
+        # Remove only the initial indentation that is common to all lines in the code block
+        def remove_initial_indentation(code):
+            lines = code.splitlines()
+            # Find the minimum indentation level that is common to all non-empty lines
+            indent_levels = [len(line) - len(line.lstrip()) for line in lines if line.strip()]
+            min_indent = min(indent_levels) if indent_levels else 0
+            # Remove this indentation level from all lines
+            return '\n'.join(line[min_indent:] for line in lines)
+
+        replaced_text = re.sub(r'\[code\](.*?)\[/code\]', lambda m: f'\n```\n{remove_initial_indentation(m.group(1)).strip()}\n```\n', text, flags=re.DOTALL)
+        return replaced_text
+
+
     def scrape_page(self, html, url):
         """
         Scrape the content and metadata from the given URL.
@@ -109,17 +126,21 @@ class Scraper:
 
         try:
             metadata = trafilatura.metadata.extract_metadata(html, url).as_dict()
-            markdown = (
-                trafilatura.extract(
-                    html,
-                    output_format="markdown",
-                    include_formatting=True,
-                    include_links=True,
-                    include_tables=True,
-                    ansi_color=None,
-                )
-                or ""
-            )
+            
+            # Parse the HTML content with BeautifulSoup
+            soup = BeautifulSoup(html, 'html.parser')
+
+            # Remove unwanted sections such as headers, footers, navigation bars, etc.
+            for element in soup(['header', 'footer', 'nav', 'aside', 'form', 'script', 'style']):
+                element.decompose()
+
+            # Attempt to find the main content area
+            main_content = soup.find('main') or soup.find(id='main-content') or soup.find('article') or soup
+            
+            text_maker = html2text.HTML2Text()
+            text_maker.mark_code = True  # Mark code with triple backticks
+            markdown = text_maker.handle(str(main_content))
+            markdown = self.replace_code_tags(markdown)
 
             logger.debug(f"Successfully scraped content and metadata from {url}")
             return markdown, metadata
