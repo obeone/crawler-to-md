@@ -3,7 +3,7 @@ coloredlogs==15.0.1
 tqdm==4.67.1    
 requests==2.32.3  
 trafilatura==1.10.0
-mdformat==0.7.18
+mdformat==0.7.19
 mdformat-gfm==0.3.7
 mdformat_footnote==0.1.1
 mdformat_frontmatter==2.0.8
