@@ -1,3 +1,4 @@
+from curses import meta
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urldefrag
@@ -109,7 +110,13 @@ class Scraper:
         logger.info(f"Scraping page {url}")
 
         try:
-            metadata = trafilatura.metadata.extract_metadata(html, url).as_dict()
+            metadata = trafilatura.metadata.extract_metadata(filecontent=html, default_url=url).as_dict()
+            
+            if "body" in metadata:
+                metadata.pop("body")
+            if "commentsbody" in metadata:
+                metadata.pop("commentsbody")
+            
             markdown = (
                 trafilatura.extract(
                     html,
@@ -117,7 +124,6 @@ class Scraper:
                     include_formatting=True,
                     include_links=True,
                     include_tables=True,
-                    ansi_color=None,
                 )
                 or ""
             )
@@ -197,6 +203,7 @@ class Scraper:
 
                 # Scrape the page for content and metadata
                 content, metadata = self.scrape_page(html, url)
+
                 # Insert the scraped data into the database
                 self.db_manager.insert_page(url, content, json.dumps(metadata))
 
