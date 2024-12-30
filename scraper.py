@@ -1,7 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urldefrag
-import logging
+import log_setup
 import trafilatura
 import mdformat
 import json
@@ -10,7 +10,8 @@ from tqdm import tqdm
 import coloredlogs
 
 
-logger = logging.getLogger(__name__)
+logger = log_setup.get_logger()
+logger.name = "Scraper"
 
 
 class Scraper:

@@ -1,6 +1,8 @@
-import logging  # Add log messages
+import log_setup  # Add log messages
 from urllib.parse import urlparse, urlunparse
 
+logger = log_setup.get_logger()
+logger.name = "utils"
 
 def randomstring_to_filename(random_string):
     """
@@ -36,7 +38,7 @@ def url_to_filename(url):
         raise ValueError("URL must be a string")
 
     parsed_url = urlparse(url)
-    logging.debug(f"Parsing URL: {url}")  # Log the URL being parsed
+    logger.debug(f"Parsing URL: {url}")  # Log the URL being parsed
 
     # Combine the network location and path, replacing slashes and periods with underscores
     base_filename = parsed_url.netloc + parsed_url.path
@@ -59,7 +61,7 @@ def url_dirname(url):
     str: The URL with the last path segment removed and ending with '/'.
     """
     parsed_url = urlparse(url)
-    logging.debug(f"Parsing URL: {url}")  # Add log message
+    logger.debug(f"Parsing URL: {url}")  # Add log message
 
     # Extract the path segments and remove the last segment
     path_segments = parsed_url.path.rsplit("/", 1)[0]

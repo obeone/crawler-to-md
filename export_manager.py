@@ -1,8 +1,10 @@
 import json
 from database_manager import DatabaseManager
-import logging  # Add log messages
+import log_setup
 import re
 
+logger = log_setup.get_logger()
+logger.name = "export_manager"
 
 class ExportManager:
     def __init__(self, db_manager: DatabaseManager, title=None):
@@ -14,7 +16,7 @@ class ExportManager:
         """
         self.db_manager = db_manager
         self.title = title
-        logging.info("ExportManager initialized.")  # Add log message
+        logger.info("ExportManager initialized.")  # Add log message
 
     def _adjust_headers(self, content, level_increment=1):
         """
@@ -103,7 +105,7 @@ class ExportManager:
         pages = self.db_manager.get_all_pages()
         with open(output_path, "w", encoding="utf-8") as md_file:
             md_file.write(self._concatenate_markdown(pages))
-        logging.info(
+        logger.info(
             f"Exported pages to markdown file: {output_path}"
         )  # Add log message
 
@@ -132,4 +134,4 @@ class ExportManager:
                 )
             json.dump(data_to_export, json_file, ensure_ascii=False, indent=4)
             # Log the successful export to JSON file
-            logging.info(f"Exported pages to JSON file: {output_path}")
+            logger.info(f"Exported pages to JSON file: {output_path}")

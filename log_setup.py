@@ -1,7 +1,11 @@
 # log_config.py
 import logging
+from logging import Logger
+from math import exp
 import coloredlogs
 from tqdm import tqdm
+
+logger = Logger("tmp")
 
 class TqdmHandler(logging.StreamHandler):
     """
@@ -37,13 +41,16 @@ def setup_logging(log_level: str = "WARN"):
     Args:
         log_level (str, optional): The minimum log level for messages to be handled. Defaults to "WARN".
     """
+    global logger
+    
     # Get the root logger
     logger = logging.getLogger()
     # Create an instance of the custom TqdmHandler
     handler = TqdmHandler()
     # Define a formatter with a specific format string, including colored output
+    # Updated to show the filename and line number instead of hostname
     formatter = coloredlogs.ColoredFormatter(
-        "%(asctime)s %(hostname)s %(name)s[%(process)d] %(levelname)s %(message)s"
+        "%(asctime)s %(filename)s:%(lineno)d %(name)s[%(process)d] %(levelname)s %(message)s"
     )
     # Set the formatter for the handler
     handler.setFormatter(formatter)
@@ -53,3 +60,15 @@ def setup_logging(log_level: str = "WARN"):
     logger.setLevel(log_level)
     # Install coloredlogs with the specified log level and logger
     coloredlogs.install(level=log_level, logger=logger)
+
+def get_logger():
+    """
+    Returns the global logger instance.
+    
+    Returns:
+        logging.Logger: The global logger instance.
+    """
+    if logger is None:
+        setup_logging()
+    
+    return logger
