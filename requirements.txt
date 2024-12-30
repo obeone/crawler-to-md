@@ -2,7 +2,7 @@ beautifulsoup4==4.12.3
 coloredlogs==15.0.1                                                                                                                               
 tqdm==4.67.1    
 requests==2.32.3  
-trafilatura==1.10.0
+trafilatura==2.0.0
 mdformat==0.7.21
 mdformat-gfm==0.4.1
 mdformat_footnote==0.1.1
