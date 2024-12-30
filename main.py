@@ -6,14 +6,14 @@ import os
 log_level = os.getenv("LOG_LEVEL", "WARN")
 log_setup.setup_logging(log_level)
 import argparse
-import logging
 import utils
 from database_manager import DatabaseManager
 from export_manager import ExportManager
 from scraper import Scraper
 import sys
 
-logger = logging.getLogger(__name__)
+logger = log_setup.get_logger()
+logger.name = "main"
 
 
 def main():
