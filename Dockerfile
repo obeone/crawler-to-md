@@ -1,7 +1,7 @@
 # Use Dockerfile syntax version 1.5 for compatibility and new features
 # syntax=docker/dockerfile:1.5
 
-FROM python:3.13 as builder
+FROM python:3.13 AS builder
 
 # Set non-interactive mode
 ENV DEBIAN_FRONTEND=noninteractive
@@ -16,7 +16,7 @@ ARG TARGETPLATFORM
 RUN --mount=type=cache,target=/var/cache/apt,id=apt-cache-${TARGETPLATFORM} \
     --mount=type=cache,target=/var/lib/apt,id=apt-lib-${TARGETPLATFORM} \
     apt-get update && \
-    apt-get install -y libxml2-dev libxslt-dev
+    apt-get install --no-install-recommends -y libxml2-dev libxslt-dev
 
 WORKDIR /app
 
@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements.txt -t packages
 
 # Start from a slim Python 3.12 image for a small final image size
-FROM python:3.13-slim as final
+FROM python:3.13-slim AS final
 
 # Set non-interactive mode
 ENV DEBIAN_FRONTEND=noninteractive
@@ -45,7 +45,7 @@ RUN --mount=type=cache,target=/var/cache/apt,id=apt-cache-${TARGETPLATFORM} \
     --mount=type=cache,target=/var/lib/apt,id=apt-lib-${TARGETPLATFORM} \
     apt-get update && \
     apt-get full-upgrade -y && \
-    apt-get install -y libxml2 libxslt1.1 libtk8.6
+    apt-get install -y --no-install-recommends libxml2 libxslt1.1 libtk8.6
 
 WORKDIR /app
 
