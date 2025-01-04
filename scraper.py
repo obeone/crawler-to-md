@@ -9,6 +9,7 @@ import json
 from database_manager import DatabaseManager
 from tqdm import tqdm
 import coloredlogs
+import time
 
 
 logger = log_setup.get_logger()
@@ -16,7 +17,7 @@ logger.name = "Scraper"
 
 
 class Scraper:
-    def __init__(self, base_url, exclude_patterns, db_manager: DatabaseManager):
+    def __init__(self, base_url, exclude_patterns, db_manager: DatabaseManager, rate_limit=0, delay=0):
         """
         Initialize the Scraper object with base URL, exclude patterns, and database manager.
         Log the initialization process.
@@ -25,11 +26,15 @@ class Scraper:
         base_url (str): The base URL to start scraping from.
         exclude_patterns (list): List of patterns to exclude from scraping.
         db_manager (DatabaseManager): The database manager object for storing scraped data.
+        rate_limit (int): Maximum number of requests per minute.
+        delay (float): Delay between requests in seconds.
         """
         logger.debug(f"Initializing Scraper with base URL: {base_url}")
         self.base_url = base_url
         self.exclude_patterns = exclude_patterns or []
         self.db_manager = db_manager
+        self.rate_limit = rate_limit
+        self.delay = delay
 
     def is_valid_link(self, link):
         """
@@ -169,6 +174,10 @@ class Scraper:
             unit="link",
         )
 
+        # Initialize rate limit tracking variables
+        request_count = 0
+        start_time = time.time()
+
         # Begin the scraping loop
         while True:
             # Fetch a list of unvisited links from the database
@@ -181,11 +190,32 @@ class Scraper:
 
             # Process each unvisited link
             for link in unvisited_links:
+                # Check rate limit
+                if self.rate_limit > 0:
+                    current_time = time.time()
+                    elapsed_time = current_time - start_time
+                    if request_count >= self.rate_limit:
+                        sleep_time = 60 - elapsed_time
+                        if sleep_time > 0:
+                            logger.debug(f"Rate limit reached, sleeping for {sleep_time} seconds")
+                            time.sleep(sleep_time)
+                        # Reset the rate limit tracker
+                        request_count = 0
+                        start_time = time.time()
+
+                # Wait for the specified self.delay before making the next request
+                if self.delay > 0:
+                    logger.debug(f"self.delaying for {self.delay} seconds before next request")
+                    time.sleep(self.delay)
+
                 pbar.update(1)  # Update the progress bar
                 url = link[0]  # Extract the URL from the link tuple
 
                 # Attempt to fetch the page content
                 response = requests.get(url)
+
+                # Increment request count for rate limiting
+                request_count += 1
 
                 # Check for a successful response and correct content type
                 if response.status_code != 200 or not response.headers.get(
