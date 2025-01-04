@@ -31,7 +31,9 @@ def main():
     parser.add_argument("--base-url", "-b", help="Base URL for filtering links. Defaults to the URL base")
     parser.add_argument("--title", "-t", help="Final title of the markdown file. Defaults to the URL")
     parser.add_argument("--exclude", "-e", action="append", help="Exclude URLs containing this string", default=[])
-    
+    parser.add_argument("--rate-limit", "-rl", type=int, help="Maximum number of requests per minute", default=0)
+    parser.add_argument("--delay", "-d", type=float, help="Delay between requests in seconds", default=0)
+
     try:
         import argcomplete
         argcomplete.autocomplete(parser)
@@ -85,8 +87,8 @@ def main():
     # Initialize managers
     db_manager = DatabaseManager(os.path.join(args.cache_folder, utils.url_to_filename(args.url if args.url else urls_list[0]) + ".sqlite"))
     logger.info("DatabaseManager initialized.")
-    
-    scraper = Scraper(args.base_url, args.exclude, db_manager)
+
+    scraper = Scraper(base_url=args.base_url, exclude_patterns=args.exclude, db_manager=db_manager, rate_limit=args.rate_limit, delay=args.delay)
     logger.info("Scraper initialized.")
 
     # Start the scraping process

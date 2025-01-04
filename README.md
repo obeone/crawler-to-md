@@ -20,6 +20,7 @@ python main.py --url https://www.example.com
 - Filters links by base URL. 🔍
 - Excludes URLs containing certain strings. ❌
 - Automatically find links or can use a file of URLs to scrape. 🔗
+- Rate limiting and delay 🕘
 - Exports data to Markdown and JSON, ready for GPT uploads. 📤
 - Uses SQLite for efficient data management. 📊
 - Configurable via command-line arguments. ⚙️
@@ -46,13 +47,15 @@ python main.py --url <URL> [--output-folder ./output] [--cache-folder ./cache] [
 
 Options:
 
-- `--url`: The starting URL. 🌍
+- `--url`, `-u`: The starting URL. 🌍
 - `--urls-file`: Path to a file containing URLs to scrape, one URL per line. If '-', read from stdin. 📁
-- `--output-folder`: Where to save Markdown files (default: `./output`). 📂
-- `--cache-folder`: Where to store the database (default: `./cache`). 💾
-- `--base-url`: Filter links by base URL (default: URL's base). 🔎
-- `--exclude`: Exclude URLs containing this string (repeatable). ❌
-- `--title`: Final title of the markdown file. Defaults to the URL. 🏷️
+- `--output-folder`, `-o`: Where to save Markdown files (default: `./output`). 📂
+- `--cache-folder`, `-c`: Where to store the database (default: `./cache`). 💾
+- `--base-url`, `-b`: Filter links by base URL (default: URL's base). 🔎
+- `--title`, `-t`: Final title of the markdown file. Defaults to the URL. 🏷️
+- `--exclude`, `-e`: Exclude URLs containing this string (repeatable). ❌
+- `--rate-limit`, `-rl`: Maximum number of requests per minute (default: 0, no rate limit). ⏱️
+- `--delay`, `-d`: Delay between requests in seconds (default: 0, no delay). 🕒
 
 One of the `--url` or `--urls-file` is required.
 
