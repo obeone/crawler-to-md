@@ -66,3 +66,10 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: true
           DIGEST: ${{ steps.docker_build.outputs.digest }}
+
+      - name: Updage Docker Hub description
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: obeoneorg/crawler-to-md
