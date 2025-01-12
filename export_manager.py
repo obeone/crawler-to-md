@@ -1,7 +1,8 @@
 import json
 from database_manager import DatabaseManager
 import log_setup
-import re
+import os
+from tqdm import tqdm
 
 logger = log_setup.get_logger()
 logger.name = "export_manager"
@@ -135,3 +136,41 @@ class ExportManager:
             json.dump(data_to_export, json_file, ensure_ascii=False, indent=4)
             # Log the successful export to JSON file
             logger.info(f"Exported pages to JSON file: {output_path}")
+
+    def export_individual_markdown(self, output_folder, base_url=None):
+        """
+        Export each page individually as Markdown, preserving the URL's structure.
+
+        Args:
+        output_folder (str): The base output folder where the files will be saved.
+        base_url (str or None): Base URL to remove for creating the path.
+        """
+        pages = self.db_manager.get_all_pages()
+        # Add 'files/' to the output folder and create it if it doesn't exist
+        output_folder = os.path.join(output_folder, "files")
+        
+        os.makedirs(output_folder, exist_ok=True)
+        for page in pages:
+            url, content, metadata = page
+            logger.debug(f"Exporting individual Markdown for URL: {url}")
+
+            # Remove base_url from parsed URL if provided
+            if base_url:
+                url = url.replace(base_url, "")
+
+            # Parse the URL to determine the folder and filename
+            parsed_url = url.replace("https://", "").replace("http://", "")
+            if parsed_url.endswith("/") or parsed_url == "":
+                file_path = os.path.join(output_folder, parsed_url, "index.md")
+            else:
+                file_path = os.path.join(output_folder, parsed_url + ".md")
+
+            # Ensure directories exist
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+            # Write the Markdown content
+            with open(file_path, "w", encoding="utf-8") as file:
+                file.write(content)
+                logger.debug(f"Markdown exported to {file_path}")
+
+        return output_folder
