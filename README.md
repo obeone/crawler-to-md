@@ -22,6 +22,7 @@ python main.py --url https://www.example.com
 - Automatically find links or can use a file of URLs to scrape. 🔗
 - Rate limiting and delay 🕘
 - Exports data to Markdown and JSON, ready for GPT uploads. 📤
+- Exports each page as an individual Markdown file if `--export-individual` is used. 📝
 - Uses SQLite for efficient data management. 📊
 - Configurable via command-line arguments. ⚙️
 - Docker support. 🐳
@@ -54,6 +55,7 @@ Options:
 - `--base-url`, `-b`: Filter links by base URL (default: URL's base). 🔎
 - `--title`, `-t`: Final title of the markdown file. Defaults to the URL. 🏷️
 - `--exclude`, `-e`: Exclude URLs containing this string (repeatable). ❌
+- `--export-individual`, `-ei`: Export each page as an individual Markdown file. 📝
 - `--rate-limit`, `-rl`: Maximum number of requests per minute (default: 0, no rate limit). ⏱️
 - `--delay`, `-d`: Delay between requests in seconds (default: 0, no delay). 🕒
 
