@@ -1,16 +1,17 @@
 from turtle import title
 import log_setup
 import os
-
-import os
-log_level = os.getenv("LOG_LEVEL", "WARN")
-log_setup.setup_logging(log_level)
 import argparse
 import utils
+import sys
+
+# Setup logging based on environment variable or default to WARN level before importing other modules.
+log_level = os.getenv("LOG_LEVEL", "WARN")
+log_setup.setup_logging(log_level)
+
 from database_manager import DatabaseManager
 from export_manager import ExportManager
 from scraper import Scraper
-import sys
 
 logger = log_setup.get_logger()
 logger.name = "main"
@@ -31,6 +32,7 @@ def main():
     parser.add_argument("--base-url", "-b", help="Base URL for filtering links. Defaults to the URL base")
     parser.add_argument("--title", "-t", help="Final title of the markdown file. Defaults to the URL")
     parser.add_argument("--exclude", "-e", action="append", help="Exclude URLs containing this string", default=[])
+    parser.add_argument("--export-individual", "-ei", action="store_true", help="Export each page as an individual Markdown file", default=False)
     parser.add_argument("--rate-limit", "-rl", type=int, help="Maximum number of requests per minute", default=0)
     parser.add_argument("--delay", "-d", type=float, help="Delay between requests in seconds", default=0)
 
@@ -107,10 +109,17 @@ def main():
     export_manager.export_to_json(os.path.join(output, f"{output_name}.json"))
     logger.info("Export to JSON completed.")
     
+    if args.export_individual:
+        logger.info("Export of individual pages...")
+        output_folder_ei = export_manager.export_individual_markdown(output_folder=output, base_url=args.base_url if args.base_url else None)
+        logger.info("Export of individual Markdown files completed.")
+    
     markdown_path = os.path.join(output, f"{output_name}.md")
     json_path = os.path.join(output, f"{output_name}.json")
     print(f"\033[94m Markdown file generated at: \033[0m", markdown_path)
     print(f"\033[92m JSON file generated at: \033[0m", json_path)
+    if args.export_individual:
+        print(f"\033[95m Individual Markdown files exported to: \033[0m", output_folder_ei)
 
 
 if __name__ == "__main__":
