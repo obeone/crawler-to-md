@@ -8,3 +8,4 @@ tqdm==4.67.1
 trafilatura==2.0.0
 coloredlogs==15.0.1
 beautifulsoup4==4.13.1
+markitdown

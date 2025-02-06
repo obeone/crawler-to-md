@@ -1,7 +1,7 @@
 from curses import meta
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin, urldefrag
+from urllib.parse import urljoin, urldefrag, urlparse
 import log_setup
 import trafilatura
 import mdformat
@@ -10,7 +10,7 @@ from database_manager import DatabaseManager
 from tqdm import tqdm
 import coloredlogs
 import time
-
+from markitdown import MarkItDown
 
 logger = log_setup.get_logger()
 logger.name = "Scraper"
@@ -122,16 +122,42 @@ class Scraper:
             if "commentsbody" in metadata:
                 metadata.pop("commentsbody")
             
-            markdown = (
-                trafilatura.extract(
-                    html,
-                    output_format="markdown",
-                    include_formatting=True,
-                    include_links=True,
-                    include_tables=True,
-                )
-                or ""
-            )
+            # markdown = (
+            #   trafilatura.extract(
+            #        html,
+            #        output_format="markdown",
+            #        include_formatting=True,
+            #        include_links=True,
+            #        include_tables=True,
+            #    )
+            #    or ""
+            # )
+
+            soup = BeautifulSoup(html, 'html.parser')
+
+            # Remove unwanted sections such as headers, footers, navigation bars, etc.
+            for element in soup(['header', 'footer', 'nav', 'aside', 'form', 'script', 'style']):
+                element.decompose()
+
+            parsed_url = urlparse(url)
+            domain = f"{parsed_url.scheme}://{parsed_url.netloc}"
+
+            # Convert absolute links (starting with "/") to full URLs
+            # Avoid ai to construct full URL from relative links as it get's it wrong most of the time.
+            for a in soup.find_all('a', href=True):
+                if a['href'].startswith('/'):
+                    a['href'] = domain + a['href']
+
+            for a in soup.find_all('a', href=True):
+                if a['href'].startswith('#'):
+                    a['href'] = url + a['href']
+
+            with open("/app/cache/output.html", "w") as file:
+                file.write(str(soup))
+
+            md = MarkItDown()
+            result = md.convert("/app/cache/output.html")
+            markdown = result.text_content
 
             logger.debug(f"Successfully scraped content and metadata from {url}")
             return markdown, metadata

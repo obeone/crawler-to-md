@@ -73,11 +73,17 @@ Run with Docker:
 docker run --rm -v $(pwd)/output:/app/output -v cache:/app/cache ghcr.io/obeone/crawler-to-md --url <URL>
 ```
 
+To reindex website you have to delete `cache` folder. Or just run this command which will create cache folder in the same folder where app is started
+
+```shell
+docker run --rm -v $(pwd)/output:/app/output -v $(pwd)/cache:/app/cache ghcr.io/obeone/crawler-to-md --url <URL>
+```
+
 Build from source:
 
 ```shell
-docker build -t crawler-to-md .
-docker run --rm -v $(pwd)/output:/app/output crawler-to-md --url <URL>
+DOCKER_BUILDKIT=1 docker build -t crawler-to-md .
+docker run --rm -v $(pwd)/output:/app/output -v $(pwd)/cache:/app/cache crawler-to-md --url <URL>
 ```
 
 ## 🤝 Contributing
