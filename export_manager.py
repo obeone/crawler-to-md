@@ -1,8 +1,9 @@
 import json
 from database_manager import DatabaseManager
+from markdown_editor import MarkdownEditor
 import log_setup
 import os
-from tqdm import tqdm
+import re
 
 logger = log_setup.get_logger()
 logger.name = "export_manager"
@@ -143,12 +144,15 @@ class ExportManager:
 
         Args:
         output_folder (str): The base output folder where the files will be saved.
-        base_url (str or None): Base URL to remove for creating the path.
+        base_url (str or None): Base URL to remove from URLs and filepaths before saving as files.
         """
         pages = self.db_manager.get_all_pages()
-        # Add 'files/' to the output folder and create it if it doesn't exist
+        # Ensure 'files/' is added to the output folder and create it if it doesn't exist
         output_folder = os.path.join(output_folder, "files")
-        
+
+        if base_url:
+            editor = MarkdownEditor(base_url)
+
         os.makedirs(output_folder, exist_ok=True)
         for page in pages:
             url, content, metadata = page
@@ -157,13 +161,27 @@ class ExportManager:
             # Remove base_url from parsed URL if provided
             if base_url:
                 url = url.replace(base_url, "")
+                # Convert absolute URLs to relative URLs in the markdown content
+                content = editor.replace_absolute_urls(content)
 
             # Parse the URL to determine the folder and filename
             parsed_url = url.replace("https://", "").replace("http://", "")
-            if parsed_url.endswith("/") or parsed_url == "":
-                file_path = os.path.join(output_folder, parsed_url, "index.md")
+
+            # Remove any file extension from the URL
+            parsed_url = re.sub(r"\.\w+$", "", parsed_url)
+
+            # Normalize the path to prevent directory traversal attacks
+            parsed_url = os.path.normpath(parsed_url)
+
+            # Construct the file path ensuring .. doesn't lead out of output_folder
+            if parsed_url.startswith(".."):
+                logger.warning(f"Skipping invalid path traversal for URL: {url}")
+                continue
+
+            if parsed_url.endswith("/") or parsed_url == ".":
+                file_path = os.path.join(output_folder, parsed_url.lstrip("./"), "index.md")
             else:
-                file_path = os.path.join(output_folder, parsed_url + ".md")
+                file_path = os.path.join(output_folder, parsed_url.lstrip("./") + ".md")
 
             # Ensure directories exist
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
