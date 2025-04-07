@@ -7,3 +7,6 @@
 /output
 __pycache__
 .git
+/pytest_cahe
+/tests
+/.github
