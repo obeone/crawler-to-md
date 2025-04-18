@@ -1,4 +1,3 @@
-from turtle import title
 import src.log_setup as log_setup
 import os
 import argparse
