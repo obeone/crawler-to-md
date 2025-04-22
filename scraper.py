@@ -17,7 +17,7 @@ logger.name = "Scraper"
 
 
 class Scraper:
-    def __init__(self, base_url, exclude_patterns, db_manager: DatabaseManager, rate_limit=0, delay=0):
+    def __init__(self, base_url, exclude_patterns, db_manager: DatabaseManager, rate_limit=0, delay=0, max_pages=0):
         """
         Initialize the Scraper object with base URL, exclude patterns, and database manager.
         Log the initialization process.
@@ -28,6 +28,7 @@ class Scraper:
         db_manager (DatabaseManager): The database manager object for storing scraped data.
         rate_limit (int): Maximum number of requests per minute.
         delay (float): Delay between requests in seconds.
+        max_pages (int): Maximum number of pages to crawl (0 means no limit).
         """
         logger.debug(f"Initializing Scraper with base URL: {base_url}")
         self.base_url = base_url
@@ -35,6 +36,7 @@ class Scraper:
         self.db_manager = db_manager
         self.rate_limit = rate_limit
         self.delay = delay
+        self.max_pages = max_pages
 
     def is_valid_link(self, link):
         """
@@ -203,9 +205,17 @@ class Scraper:
         # Initialize rate limit tracking variables
         request_count = 0
         start_time = time.time()
+        
+        # Initialize page counter for max_pages limit
+        pages_processed = 0
 
         # Begin the scraping loop
         while True:
+            # Check if we've reached the maximum number of pages
+            if self.max_pages > 0 and pages_processed >= self.max_pages:
+                logger.info(f"Reached maximum number of pages ({self.max_pages}). Stopping.")
+                break
+                
             # Fetch a list of unvisited links from the database
             unvisited_links = self.db_manager.get_unvisited_links()
 
@@ -216,6 +226,11 @@ class Scraper:
 
             # Process each unvisited link
             for link in unvisited_links:
+                # Check if we've reached the maximum number of pages
+                if self.max_pages > 0 and pages_processed >= self.max_pages:
+                    logger.info(f"Reached maximum number of pages ({self.max_pages}). Stopping.")
+                    break
+                    
                 # Check rate limit
                 if self.rate_limit > 0:
                     current_time = time.time()
@@ -262,9 +277,12 @@ class Scraper:
 
                 # Insert the scraped data into the database
                 self.db_manager.insert_page(url, content, json.dumps(metadata))
+                
+                # Increment the page counter
+                pages_processed += 1
 
                 # Fetch and insert new links found on the page, if not working from a predefined list
-                if not urls_list:
+                if not urls_list and (self.max_pages == 0 or pages_processed < self.max_pages):
                     new_links = self.fetch_links(html=html, url=url)
 
                     # Count and insert new links into the database

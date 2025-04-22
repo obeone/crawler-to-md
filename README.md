@@ -58,6 +58,8 @@ Options:
 - `--export-individual`, `-ei`: Export each page as an individual Markdown file. 📝
 - `--rate-limit`, `-rl`: Maximum number of requests per minute (default: 0, no rate limit). ⏱️
 - `--delay`, `-d`: Delay between requests in seconds (default: 0, no delay). 🕒
+- `--max-pages`, `-mp`: Maximum number of pages to crawl (default: 0, no limit).
+
 
 One of the `--url` or `--urls-file` is required.
 

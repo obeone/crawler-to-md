@@ -21,6 +21,7 @@ if [[ -z "$API_BASE_URL" ]]; then
   echo "Error: API base URL is required (--api-base-url)"
   exit 1
 fi
+
 OUTPUT_DIR="$(pwd)/output"
 CACHE_DIR="$(pwd)/cache"
 LOCK_FILE="/tmp/crawler_to_md.lock"
@@ -98,8 +99,11 @@ echo "$CRAWLS" | jq -c '.[]' | while read -r crawl; do
   URL_ARRAY=$(echo "$crawl" | jq -r '.url') # Might be null or an array
   BASE_URL=$(echo "$crawl" | jq -r '.base_url')
   START_URL=$(echo "$crawl" | jq -r '.start_url')
+  
+  # Get max_pages from JSON, default to 500 if not provided
+  MAX_PAGES=$(echo "$crawl" | jq -r '.max_pages // 500')
 
-  echo "Processing crawl ID: $CRAWL_ID - $CRAWL_NAME"
+  echo "Processing crawl ID: $CRAWL_ID - $CRAWL_NAME with max pages: $MAX_PAGES"
 
   # Generate the title for the crawler
   TITLE="${CRAWL_ID}_crawl"
@@ -130,7 +134,8 @@ echo "$CRAWLS" | jq -c '.[]' | while read -r crawl; do
       -v "${CACHE_DIR}:/app/cache" \
       remdex/crawler-to-md \
       --urls-file /app/url.txt \
-      --title "$TITLE"
+      --title "$TITLE" \
+      --max-pages "$MAX_PAGES"
 
     # Clean up temporary file
     rm -f "$TEMP_URL_FILE"
@@ -144,7 +149,8 @@ echo "$CRAWLS" | jq -c '.[]' | while read -r crawl; do
       remdex/crawler-to-md \
       --base-url "$BASE_URL" \
       --url "$START_URL" \
-      --title "$TITLE"
+      --title "$TITLE" \
+      --max-pages "$MAX_PAGES"
   fi
   
   # Check if crawler was successful

@@ -35,6 +35,7 @@ def main():
     parser.add_argument("--export-individual", "-ei", action="store_true", help="Export each page as an individual Markdown file", default=False)
     parser.add_argument("--rate-limit", "-rl", type=int, help="Maximum number of requests per minute", default=0)
     parser.add_argument("--delay", "-d", type=float, help="Delay between requests in seconds", default=0)
+    parser.add_argument("--max-pages", "-mp", type=int, help="Maximum number of pages to crawl", default=0)
 
     try:
         import argcomplete
@@ -90,7 +91,7 @@ def main():
     db_manager = DatabaseManager(os.path.join(args.cache_folder, utils.url_to_filename(args.url if args.url else urls_list[0]) + ".sqlite"))
     logger.info("DatabaseManager initialized.")
 
-    scraper = Scraper(base_url=args.base_url, exclude_patterns=args.exclude, db_manager=db_manager, rate_limit=args.rate_limit, delay=args.delay)
+    scraper = Scraper(base_url=args.base_url, exclude_patterns=args.exclude, db_manager=db_manager, rate_limit=args.rate_limit, delay=args.delay, max_pages=args.max_pages)
     logger.info("Scraper initialized.")
 
     # Start the scraping process
