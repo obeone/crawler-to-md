@@ -86,6 +86,14 @@ DOCKER_BUILDKIT=1 docker build -t crawler-to-md .
 docker run --rm -v $(pwd)/output:/app/output -v $(pwd)/cache:/app/cache crawler-to-md --url <URL>
 ```
 
+## Integration with ChatGPT extension
+
+https://github.com/LiveHelperChat/chatGPT
+
+```shell
+./crawl.sh --api-key YOUR_API_KEY --api-base-url https://chat.example.com/chatgptvector
+```
+
 ## 🤝 Contributing
 
 Contributions are welcome! Feel free to submit pull requests or open issues. 🌟
