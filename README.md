@@ -7,7 +7,7 @@ This Python-based web scraper fetches content from URLs and exports it into Mark
 (Or even better, **[use Docker!](#-docker-support) 🐳**)
 
 ```shell
-git clone https://github.com/obeone/crawler-to-md.git
+git clone https://github.com/LiveHelperChat/crawler-to-md.git
 cd crawler-to-md
 pip install -r requirements.txt
 
@@ -72,13 +72,13 @@ By default, `WARN` level is used. You can change it with the `LOG_LEVEL` environ
 Run with Docker:
 
 ```shell
-docker run --rm -v $(pwd)/output:/app/output -v cache:/app/cache ghcr.io/obeone/crawler-to-md --url <URL>
+docker run --rm -v $(pwd)/output:/app/output -v cache:/app/cache remdex/crawler-to-md --url <URL>
 ```
 
 To reindex website you have to delete `cache` folder. Or just run this command which will create cache folder in the same folder where app is started
 
 ```shell
-docker run --rm -v $(pwd)/output:/app/output -v $(pwd)/cache:/app/cache ghcr.io/obeone/crawler-to-md --url <URL>
+docker run --rm -v $(pwd)/output:/app/output -v $(pwd)/cache:/app/cache remdex/crawler-to-md --url <URL>
 ```
 
 Build from source:
