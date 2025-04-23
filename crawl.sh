@@ -6,7 +6,7 @@ while [[ "$#" -gt 0 ]]; do
   case $1 in
     --api-key) API_KEY="$2"; shift ;;
     --api-base-url) API_BASE_URL="$2"; shift ;;
-    *) echo "Unknown parameter: $1"; exit 1 ;;
+    *) echo "Unknown parameter: $1"; shift ;;
   esac
   shift
 done
