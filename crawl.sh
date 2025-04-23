@@ -25,36 +25,77 @@ fi
 OUTPUT_DIR="$(pwd)/output"
 CACHE_DIR="$(pwd)/cache"
 LOCK_FILE="/tmp/crawler_to_md.lock"
+PID_FILE="/tmp/crawler_to_md.pid" # Process ID file for additional lock mechanism
 LOCK_TIMEOUT=$((30 * 60)) # 30 minutes in seconds
+
+# Function to check if a process with given PID exists and is our script
+is_process_running() {
+  local pid=$1
+  if ps -p "$pid" > /dev/null; then
+    # Check if it's the same script (using command name)
+    if ps -p "$pid" -o comm= | grep -q "bash"; then
+      return 0 # Process exists
+    fi
+  fi
+  return 1 # Process doesn't exist
+}
+
+# Function to check if another instance is running
+check_instance() {
+  # Check PID file first
+  if [ -f "$PID_FILE" ]; then
+    local stored_pid=$(cat "$PID_FILE")
+    if is_process_running "$stored_pid"; then
+      echo "Another instance is running with PID $stored_pid. Exiting."
+      return 1
+    else
+      echo "Found stale PID file. Previous process is no longer running."
+      # Remove stale PID file
+      rm -f "$PID_FILE"
+    fi
+  fi
+  
+  # Then check lock file
+  if [ -f "$LOCK_FILE" ]; then
+    # Get the timestamp from the lock file
+    LOCK_TIMESTAMP=$(cat "$LOCK_FILE")
+    CURRENT_TIMESTAMP=$(date +%s)
+    
+    # Calculate how long the lock has existed
+    LOCK_AGE=$((CURRENT_TIMESTAMP - LOCK_TIMESTAMP))
+    
+    if [ $LOCK_AGE -lt $LOCK_TIMEOUT ]; then
+      echo "Another instance might be running (lock file exists). Exiting."
+      return 1
+    else
+      echo "Found stale lock file (older than $LOCK_TIMEOUT seconds). Taking over..."
+      rm -f "$LOCK_FILE"
+    fi
+  fi
+  
+  return 0
+}
 
 # Function to clean up and release lock
 cleanup() {
-  echo "Cleaning up and releasing lock..."
+  echo "Cleaning up and releasing locks..."
   rm -f "$LOCK_FILE"
+  rm -f "$PID_FILE"
 }
 
-# Set up trap to ensure lock file is removed on exit
-trap cleanup EXIT
+# Set up trap to ensure lock files are removed on exit
+trap cleanup EXIT INT TERM
 
 # Check if another instance is running
-if [ -f "$LOCK_FILE" ]; then
-  # Get the timestamp from the lock file
-  LOCK_TIMESTAMP=$(cat "$LOCK_FILE")
-  CURRENT_TIMESTAMP=$(date +%s)
-  
-  # Calculate how long the lock has existed
-  LOCK_AGE=$((CURRENT_TIMESTAMP - LOCK_TIMESTAMP))
-  
-  if [ $LOCK_AGE -lt $LOCK_TIMEOUT ]; then
-    echo "Another instance is running. Exiting."
-    exit 1
-  else
-    echo "Found stale lock file (older than $LOCK_TIMEOUT seconds). Taking over..."
-  fi
+if ! check_instance; then
+  exit 1
 fi
 
-# Create lock file with current timestamp
+# Create lock file with current timestamp and PID file with current process ID
 date +%s > "$LOCK_FILE"
+echo $$ > "$PID_FILE"
+
+echo "Lock acquired. Process ID: $$"
 
 # Remove existing output and cache directories
 echo "Cleaning up previous output and cache directories..."
