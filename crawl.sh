@@ -55,6 +55,7 @@ check_instance() {
       echo "Found stale PID file. Previous process is no longer running."
       # Remove stale PID file
       rm -f "$PID_FILE"
+      rm -f "$LOCK_FILE"
     fi
   fi
   
