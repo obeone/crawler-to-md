@@ -78,9 +78,17 @@ check_instance() {
 
 # Function to clean up and release lock
 cleanup() {
-  echo "Cleaning up and releasing locks..."
-  rm -f "$LOCK_FILE"
-  rm -f "$PID_FILE"
+  # Only clean up if we own the locks (our PID matches the one in the PID file)
+  if [ -f "$PID_FILE" ]; then
+    local stored_pid=$(cat "$PID_FILE")
+    if [ "$stored_pid" -eq $$ ]; then
+      echo "Cleaning up and releasing locks..."
+      rm -f "$LOCK_FILE"
+      rm -f "$PID_FILE"
+    else
+      echo "Not removing lock files as they belong to another process."
+    fi
+  fi
 }
 
 # Set up trap to ensure lock files are removed on exit
