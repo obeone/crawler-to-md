@@ -32,12 +32,15 @@ LOCK_TIMEOUT=$((30 * 60)) # 30 minutes in seconds
 is_process_running() {
   local pid=$1
   if ps -p "$pid" > /dev/null; then
-    # Check if it's the same script (using command name)
-    if ps -p "$pid" -o comm= | grep -q "bash"; then
-      return 0 # Process exists
+    # Get the command line of the process to verify it's our crawler script
+    local cmd_line=$(ps -p "$pid" -o args= 2>/dev/null || ps -p "$pid" -o command= 2>/dev/null)
+    
+    # Look for crawl.sh in the command line to make sure it's our script
+    if echo "$cmd_line" | grep -q "crawl.sh"; then
+      return 0 # Process exists and is our script
     fi
   fi
-  return 1 # Process doesn't exist
+  return 1 # Process doesn't exist or isn't our script
 }
 
 # Function to check if another instance is running
