@@ -150,6 +150,13 @@ echo "$CRAWLS" | jq -c '.[]' | while read -r crawl; do
   TITLE="${CRAWL_ID}_crawl"
   TEMP_URL_FILE="$(pwd)/url_${CRAWL_ID}.txt" # Unique temp file per crawl
 
+  curl -s -X POST \
+    -H "X-API-KEY: ${API_KEY}" \
+    -F "crawl_id=$CRAWL_ID" \
+    -F "status=1" \
+    -F "number_of_pages=0" \
+    "${API_BASE_URL}/updatecrawlstatus"
+
   # Check if URL_ARRAY is a non-empty array
   if [ "$(echo "$URL_ARRAY" | jq 'if type=="array" and length > 0 then "yes" else "no" end')" == '"yes"' ]; then
     echo "Using URL list..."
@@ -161,9 +168,10 @@ echo "$CRAWLS" | jq -c '.[]' | while read -r crawl; do
         rm -f "$TEMP_URL_FILE"
         # Update status to error and continue to next crawl
         curl -s -X POST \
-          -H "Content-Type: application/json" \
           -H "X-API-KEY: ${API_KEY}" \
-          -d "{\"crawl_id\": $CRAWL_ID, \"status\": 4, \"number_of_pages\": 0}" \
+          -F "crawl_id=$CRAWL_ID" \
+          -F "status=2" \
+          -F "number_of_pages=0" \
           "${API_BASE_URL}/updatecrawlstatus"
         continue
     fi
@@ -214,7 +222,7 @@ echo "$CRAWLS" | jq -c '.[]' | while read -r crawl; do
   # Check if crawler was successful
   if [ ! -f "$EXPECTED_FILE" ]; then
     echo "Crawler failed for crawl ID: $CRAWL_ID - File not found"
-    STATUS=4  # Error status
+    STATUS=2  # Error status
     NUMBER_OF_PAGES=0
     
     # Update status for failed crawl
