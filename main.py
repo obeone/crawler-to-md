@@ -1,17 +1,16 @@
-from turtle import title
-import log_setup
+import src.log_setup as log_setup
 import os
 import argparse
-import utils
+import src.utils as utils
 import sys
 
 # Setup logging based on environment variable or default to WARN level before importing other modules.
 log_level = os.getenv("LOG_LEVEL", "WARN")
 log_setup.setup_logging(log_level)
 
-from database_manager import DatabaseManager
-from export_manager import ExportManager
-from scraper import Scraper
+from src.database_manager import DatabaseManager
+from src.export_manager import ExportManager
+from src.scraper import Scraper
 
 logger = log_setup.get_logger()
 logger.name = "main"

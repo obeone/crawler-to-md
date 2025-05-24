@@ -1,6 +1,6 @@
 import json
-from database_manager import DatabaseManager
-import log_setup
+from . import log_setup
+from .database_manager import DatabaseManager
 import os
 from tqdm import tqdm
 

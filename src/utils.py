@@ -1,4 +1,4 @@
-import log_setup  # Add log messages
+from . import log_setup  # Add log messages
 from urllib.parse import urlparse, urlunparse
 
 logger = log_setup.get_logger()
@@ -99,4 +99,3 @@ def deduplicate_list(input_list):
     seen = set()
     deduplicated_list = [x for x in input_list if not (x in seen or seen.add(x))]
     return deduplicated_list
-

@@ -2,11 +2,11 @@ from curses import meta
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urldefrag
-import log_setup
+from . import log_setup
 import trafilatura
 import mdformat
 import json
-from database_manager import DatabaseManager
+from .database_manager import DatabaseManager
 from tqdm import tqdm
 import coloredlogs
 import time
