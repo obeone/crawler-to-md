@@ -47,3 +47,72 @@ def test_scrape_page_parses_content_and_metadata():
     assert 'Hello' in content
     assert metadata.get('title') == 'Test'
     assert metadata.get('url') == 'http://example.com/test'
+
+import requests
+import tqdm
+
+class ListDB(DummyDB):
+    def __init__(self):
+        self.links = []
+        self.visited = set()
+        self.pages = []
+
+    def insert_link(self, url, visited=False):
+        urls = url if isinstance(url, list) else [url]
+        inserted = False
+        for u in urls:
+            if u not in self.links:
+                self.links.append(u)
+                inserted = True
+        return inserted
+
+    def get_unvisited_links(self):
+        return [(u,) for u in self.links if u not in self.visited]
+
+    def mark_link_visited(self, url):
+        self.visited.add(url)
+
+    def get_links_count(self):
+        return len(self.links)
+
+    def get_visited_links_count(self):
+        return len(self.visited)
+
+    def insert_page(self, url, content, metadata):
+        self.pages.append((url, content, metadata))
+
+    def get_all_pages(self):
+        return self.pages
+
+
+def test_start_scraping_process(monkeypatch):
+    db = ListDB()
+    scraper = Scraper(base_url='http://example.com', exclude_patterns=[], db_manager=db)
+
+    monkeypatch.setattr(Scraper, 'fetch_links', lambda self, url, html=None: set())
+    monkeypatch.setattr(Scraper, 'scrape_page', lambda self, html, url: ('# MD', {'url': url}))
+
+    class DummyResp:
+        status_code = 200
+        headers = {'content-type': 'text/html'}
+        content = b'<html></html>'
+
+    monkeypatch.setattr(requests, 'get', lambda url: DummyResp())
+
+    class DummyTqdm:
+        def __init__(self, *a, **k):
+            self.total = k.get('total', 0)
+        def update(self, n):
+            pass
+        def refresh(self):
+            pass
+        def close(self):
+            pass
+
+    monkeypatch.setattr(tqdm, 'tqdm', lambda *a, **k: DummyTqdm(*a, **k))
+
+    scraper.start_scraping(url='http://example.com/page')
+
+    assert db.get_links_count() == 1
+    assert db.get_visited_links_count() == 1
+    assert db.pages[0][0] == 'http://example.com/page'

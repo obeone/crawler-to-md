@@ -72,3 +72,34 @@ def test_export_individual_markdown(tmp_path):
     expected = tmp_path / 'files' / 'example.com' / 'path' / 'page.md'
     assert expected.exists()
     assert output_folder == str(tmp_path / 'files')
+
+
+def test_adjust_headers_upper_limit():
+    db = DatabaseManager(':memory:')
+    exporter = ExportManager(db)
+    content = '###### H6\n####### H7'
+    adjusted = exporter._adjust_headers(content, level_increment=1)
+    lines = [l for l in adjusted.split('\n') if l.startswith('#')]
+    # both lines should not exceed 6 hashes
+    assert all(len(l.split()[0]) <= 6 for l in lines)
+
+
+def test_concatenate_skips_none_content():
+    db = DatabaseManager(':memory:')
+    db.insert_page('http://a', None, '{}')
+    db.insert_page('http://b', '# T', '{}')
+    exporter = ExportManager(db, title='Top')
+    content = exporter._concatenate_markdown(db.get_all_pages())
+    assert 'URL: http://a' not in content
+    assert 'URL: http://b' in content
+
+
+def test_export_to_json_skips_none(tmp_path):
+    db = DatabaseManager(':memory:')
+    db.insert_page('http://a', None, '{}')
+    db.insert_page('http://b', '# T', '{}')
+    exporter = ExportManager(db)
+    json_path = tmp_path / 'out.json'
+    exporter.export_to_json(str(json_path))
+    data = json.load(open(json_path, 'r', encoding='utf-8'))
+    assert len(data) == 1 and data[0]['url'] == 'http://b'
