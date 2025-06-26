@@ -202,16 +202,73 @@ echo "$CRAWLS" | jq -c '.[]' | while read -r crawl; do
     rm -f "$TEMP_URL_FILE"
   elif [ -n "$BASE_URL" ] && [ -n "$START_URL" ]; then
     echo "Using Base URL: $BASE_URL and Start URL: $START_URL"
-    # Run the crawler with base_url and start_url
-    echo "Starting crawler..."
-    docker run --rm \
-      -v "${OUTPUT_DIR}:/app/output" \
-      -v "${CACHE_DIR}:/app/cache" \
-      remdex/crawler-to-md \
-      --base-url "$BASE_URL" \
-      --url "$START_URL" \
-      --title "$TITLE" \
-      --max-pages "$MAX_PAGES"
+    
+    # Check content type of BASE_URL
+    echo "Checking content type of BASE_URL..."
+    CONTENT_TYPE=$(curl -s -I -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" "$BASE_URL" | grep -i "content-type:" | head -1 | cut -d' ' -f2- | tr -d '\r\n' | cut -d';' -f1)
+    echo "Content type detected: $CONTENT_TYPE"
+    
+    if [[ "$CONTENT_TYPE" == *"application/json"* ]] || [[ "$CONTENT_TYPE" == *"application/pdf"* ]]; then
+      echo "Detected JSON or PDF content. Downloading as single file..."
+      
+      # Determine file extension based on content type
+      if [[ "$CONTENT_TYPE" == *"application/json"* ]]; then
+        FILE_EXT="json"
+      else
+        FILE_EXT="pdf"
+      fi
+      
+      # Create output directory structure
+      FOLDER_NAME=$(echo "$BASE_URL" | sed -e 's|^[^/]*//||' -e 's|/.*$||' | tr '.' '_')
+      mkdir -p "${OUTPUT_DIR}/${FOLDER_NAME}"
+      
+      # Download the file
+      DOWNLOAD_FILE="${OUTPUT_DIR}/${FOLDER_NAME}/${TITLE}.${FILE_EXT}"
+      echo "Downloading to: $DOWNLOAD_FILE"
+      
+      if curl -s -o "$DOWNLOAD_FILE" -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" "$BASE_URL"; then
+        echo "File downloaded successfully"
+        
+        STATUS=3  # Completed status
+        NUMBER_OF_PAGES=1
+        
+        # Upload the original file with its native extension
+        curl -s -X POST \
+          -H "X-API-KEY: ${API_KEY}" \
+          -F "crawl_id=$CRAWL_ID" \
+          -F "status=$STATUS" \
+          -F "number_of_pages=$NUMBER_OF_PAGES" \
+          -F "file=@$DOWNLOAD_FILE" \
+          "${API_BASE_URL}/updatecrawlstatus"
+        
+        echo "File upload completed for crawl ID: $CRAWL_ID"
+        continue
+      else
+        echo "Failed to download file from $BASE_URL"
+        STATUS=2  # Error status
+        NUMBER_OF_PAGES=0
+        
+        # Update status for failed download
+        curl -s -X POST \
+          -H "X-API-KEY: ${API_KEY}" \
+          -F "crawl_id=$CRAWL_ID" \
+          -F "status=$STATUS" \
+          -F "number_of_pages=$NUMBER_OF_PAGES" \
+          "${API_BASE_URL}/updatecrawlstatus"
+        continue
+      fi
+    else
+      # Run the crawler with base_url and start_url for other content types
+      echo "Starting crawler..."
+      docker run --rm \
+        -v "${OUTPUT_DIR}:/app/output" \
+        -v "${CACHE_DIR}:/app/cache" \
+        remdex/crawler-to-md \
+        --base-url "$BASE_URL" \
+        --url "$START_URL" \
+        --title "$TITLE" \
+        --max-pages "$MAX_PAGES"
+    fi
   fi
   
   # Check if crawler was successful
