@@ -8,7 +8,14 @@ from bs4 import BeautifulSoup, Tag
 from tqdm import tqdm
 
 from . import log_setup
+from markitdown import MarkItDown
+import json
 from .database_manager import DatabaseManager
+from tqdm import tqdm
+import time
+import tempfile
+import os
+
 
 logger = log_setup.get_logger()
 logger.name = "Scraper"
@@ -84,7 +91,7 @@ class Scraper:
                     )
                     return []
                 else:
-                    content = response.content
+                    content = response.text
             else:
                 content = html
 
@@ -128,25 +135,22 @@ class Scraper:
         logger.info(f"Scraping page {url}")
 
         try:
-            metadata = trafilatura.metadata.extract_metadata(
-                filecontent=html, default_url=url
-            ).as_dict()
-
-            if "body" in metadata:
-                metadata.pop("body")
-            if "commentsbody" in metadata:
-                metadata.pop("commentsbody")
-
-            markdown = (
-                trafilatura.extract(
-                    html,
-                    output_format="markdown",
-                    include_formatting=True,
-                    include_links=True,
-                    include_tables=True,
-                )
-                or ""
-            )
+            # Parse the content using BeautifulSoup
+            soup = BeautifulSoup(html, "html.parser")
+            
+            # Extract title from the page
+            title = soup.title.string if soup.title else ""
+            
+            metadata = {"title": title}
+            
+            # Convert the HTML to Markdown
+            with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".html") as tmp:
+                tmp.write(html)
+                tmp_path = tmp.name
+            
+            markdown = str(MarkItDown().convert(tmp_path))
+            
+            os.remove(tmp_path)
 
             logger.debug(f"Successfully scraped content and metadata from {url}")
             return markdown, metadata
@@ -250,7 +254,7 @@ class Scraper:
                     continue
 
                 # Extract the HTML content from the response
-                html = response.content
+                html = response.text
 
                 # Scrape the page for content and metadata
                 content, metadata = self.scrape_page(html, url)

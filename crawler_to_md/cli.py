@@ -20,8 +20,15 @@ logger.name = "main"
 def main():
     """
     Main function to start the web scraper application.
+
+    This function parses command line arguments, initializes necessary components,
+    and manages the scraping and exporting process.
+
+    Raises:
+        ValueError: If neither a URL nor a URLs file is provided.
     """
     logger.info("Starting the web scraper application.")
+
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Web Scraper to Markdown")
@@ -85,9 +92,11 @@ def main():
     try:
         import argcomplete
 
+
         argcomplete.autocomplete(parser)
     except ImportError:
         pass
+
 
     args = parser.parse_args()
     logger.debug(f"Command line arguments parsed: {args}")
@@ -101,10 +110,12 @@ def main():
             with open(args.urls_file, "r") as file:
                 urls_list = [line.strip() for line in file.readlines()]
 
+
         urls_list = utils.deduplicate_list(urls_list)
         args.url = None  # Ensure args.url is defined even if not used
     else:
         urls_list = []
+
 
     if not args.url and not urls_list:
         raise ValueError("No URL provided. Please provide either --url or --urls-file.")
@@ -147,6 +158,13 @@ def main():
         rate_limit=args.rate_limit,
         delay=args.delay,
     )
+    scraper = Scraper(
+        base_url=args.base_url,
+        exclude_patterns=args.exclude,
+        db_manager=db_manager,
+        rate_limit=args.rate_limit,
+        delay=args.delay,
+    )
     logger.info("Scraper initialized.")
 
     # Start the scraping process
@@ -159,8 +177,10 @@ def main():
     export_manager = ExportManager(db_manager, args.title)
     logger.info("ExportManager initialized.")
 
+
     export_manager.export_to_markdown(os.path.join(output, f"{output_name}.md"))
     logger.info("Export to markdown completed.")
+
 
     export_manager.export_to_json(os.path.join(output, f"{output_name}.json"))
     logger.info("Export to JSON completed.")
@@ -172,6 +192,7 @@ def main():
             output_folder=output, base_url=args.base_url
         )
         logger.info("Export of individual Markdown files completed.")
+
 
     markdown_path = os.path.join(output, f"{output_name}.md")
     json_path = os.path.join(output, f"{output_name}.json")

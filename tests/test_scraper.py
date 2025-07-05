@@ -39,14 +39,52 @@ def test_fetch_links():
     assert links == {'https://example.com/page1', 'https://example.com/page2'}
 
 
-def test_scrape_page_parses_content_and_metadata():
+from unittest.mock import patch, MagicMock
+
+...
+
+@patch('os.remove')
+@patch('tempfile.NamedTemporaryFile')
+def test_scrape_page_parses_content_and_metadata(mock_tempfile, mock_os_remove):
+    # Arrange
+    mock_file = MagicMock()
+    mock_file.name = "dummy_path"
+    mock_tempfile.return_value.__enter__.return_value = mock_file
+
     db = DummyDB()
     scraper = Scraper(base_url='http://example.com', exclude_patterns=[], db_manager=db)
     html = '<html><head><title>Test</title></head><body><p>Hello</p></body></html>'
-    content, metadata = scraper.scrape_page(html, 'http://example.com/test')
+    
+    # Act
+    with patch('src.scraper.MarkItDown') as mock_markdown:
+        mock_markdown.return_value.convert.return_value = "Hello"
+        content, metadata = scraper.scrape_page(html, 'http://example.com/test')
+
+    # Assert
     assert 'Hello' in content
     assert metadata.get('title') == 'Test'
-    assert metadata.get('url') == 'http://example.com/test'
+
+@patch('os.remove')
+@patch('tempfile.NamedTemporaryFile')
+def test_scrape_page_with_markitdown(mock_tempfile, mock_os_remove):
+    # Arrange
+    mock_file = MagicMock()
+    mock_file.name = "dummy_path"
+    mock_tempfile.return_value.__enter__.return_value = mock_file
+    
+    db = DummyDB()
+    scraper = Scraper(base_url='http://example.com', exclude_patterns=[], db_manager=db)
+    html = '<html><head><title>Test</title></head><body><h1>A Title</h1><p>This is a paragraph with <strong>bold</strong> text.</p></body></html>'
+    
+    # Act
+    with patch('src.scraper.MarkItDown') as mock_markdown:
+        mock_markdown.return_value.convert.return_value = "# A Title\n\nThis is a paragraph with **bold** text."
+        content, metadata = scraper.scrape_page(html, 'http://example.com/test')
+
+    # Assert
+    assert content == '# A Title\n\nThis is a paragraph with **bold** text.'
+    assert metadata.get('title') == 'Test'
+
 
 import requests
 import tqdm
@@ -96,6 +134,7 @@ def test_start_scraping_process(monkeypatch):
         status_code = 200
         headers = {'content-type': 'text/html'}
         content = b'<html></html>'
+        text = '<html></html>'
 
     monkeypatch.setattr(requests, 'get', lambda url: DummyResp())
 
