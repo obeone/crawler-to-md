@@ -6,10 +6,21 @@ This Python-based web scraper fetches content from URLs and exports it into Mark
 
 (Or even better, **[use Docker!](#-docker-support) 🐳**)
 
+### Recommended installation using pipx (isolated environment)
+
 ```shell
-git clone https://github.com/obeone/crawler-to-md.git
-cd crawler-to-md
-pip install .
+pipx install crawler-to-md
+```
+
+### Alternatively, install with pip
+
+```shell
+pip install crawler-to-md
+```
+
+Then run the scraper:
+
+```shell
 crawler-to-md --url https://www.example.com
 ```
 
