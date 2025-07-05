@@ -9,3 +9,6 @@ __pycache__
 .cursorignore
 /test.py
 .aider*
+*.egg-info
+.pytest_cache
+.ruff_cache

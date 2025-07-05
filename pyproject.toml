@@ -1,0 +1,78 @@
+# PEP 621 project metadata configuration
+# For more information, see https://www.python.org/dev/peps/pep-0621/
+[project]
+name = "crawler-to-md"
+version = "0.1.0"
+description = "A tool to crawl web content and convert it to Markdown format."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [
+    { name = "obeone", email = "obeone@obeone.org" }
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Build Tools",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+# Project dependencies with exact versions for reproducibility
+dependencies = [
+    "mdformat==0.7.22",
+    "mdformat-gfm==0.4.1",
+    "mdformat_footnote==0.1.1",
+    "mdformat_frontmatter==2.0.8",
+    "mdformat_tables==1.0.0",
+    "requests==2.32.3",
+    "tqdm==4.67.1",
+    "trafilatura==2.0.0",
+    "coloredlogs==15.0.1",
+    "beautifulsoup4==4.13.4",
+    "argcomplete==3.3.0",
+]
+
+# Optional dependencies for additional features or development
+# Uncomment and customize as needed
+# [project.optional-dependencies]
+# dev = ["pytest", "ruff"]
+
+# Entry points for command-line interface scripts
+[project.scripts]
+crawler-to-md = "crawler_to_md.cli:main"
+
+# URLs related to the project repository and issue tracker
+[project.urls]
+Homepage = "https://github.com/user/project"
+Bug_Tracker = "https://github.com/user/project/issues"
+
+# Build system configuration using setuptools
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+# Setuptools package discovery configuration
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["crawler_to_md*"]
+
+# Ruff linter configuration for code style enforcement
+# See https://docs.astral.sh/ruff/configuration/
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+# Pytest configuration for running tests
+# See https://docs.pytest.org/en/latest/reference/reference.html#configuration-options
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = [
+    "tests",
+]

@@ -1,5 +1,5 @@
-import sqlite3
 import logging
+import sqlite3
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ class DatabaseManager:
                 )
                 if cur.rowcount > 0:
                     count += 1
-                    
+
             return count > 0
 
     def mark_link_visited(self, url):

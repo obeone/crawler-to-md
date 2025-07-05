@@ -1,33 +1,38 @@
-from curses import meta
-import requests
-from bs4 import BeautifulSoup
-from urllib.parse import urljoin, urldefrag
-from . import log_setup
-import trafilatura
-import mdformat
 import json
-from .database_manager import DatabaseManager
-from tqdm import tqdm
-import coloredlogs
 import time
+from urllib.parse import urldefrag, urljoin
 
+import requests
+import trafilatura
+from bs4 import BeautifulSoup, Tag
+from tqdm import tqdm
+
+from . import log_setup
+from .database_manager import DatabaseManager
 
 logger = log_setup.get_logger()
 logger.name = "Scraper"
 
 
 class Scraper:
-    def __init__(self, base_url, exclude_patterns, db_manager: DatabaseManager, rate_limit=0, delay=0):
+    def __init__(
+        self,
+        base_url,
+        exclude_patterns,
+        db_manager: DatabaseManager,
+        rate_limit=0,
+        delay=0,
+    ):
         """
-        Initialize the Scraper object with base URL, exclude patterns, and database manager.
+        Initialize the Scraper object.
         Log the initialization process.
 
         Args:
-        base_url (str): The base URL to start scraping from.
-        exclude_patterns (list): List of patterns to exclude from scraping.
-        db_manager (DatabaseManager): The database manager object for storing scraped data.
-        rate_limit (int): Maximum number of requests per minute.
-        delay (float): Delay between requests in seconds.
+            base_url (str): The base URL to start scraping from.
+            exclude_patterns (list): List of patterns to exclude from scraping.
+            db_manager (DatabaseManager): The database manager object.
+            rate_limit (int): Maximum number of requests per minute.
+            delay (float): Delay between requests in seconds.
         """
         logger.debug(f"Initializing Scraper with base URL: {base_url}")
         self.base_url = base_url
@@ -42,10 +47,10 @@ class Scraper:
         Log the result of the validation.
 
         Args:
-        link (str): The link to be checked.
+            link (str): The link to be checked.
 
         Returns:
-        bool: True if the link is valid, False otherwise.
+            bool: True if the link is valid, False otherwise.
         """
         valid = True
         if self.base_url and not link.startswith(self.base_url):
@@ -62,11 +67,11 @@ class Scraper:
         Log the fetching process and outcome.
 
         Args:
-        url (str): The URL to fetch links from.
-        html (str, optional): The HTML content of the page.
+            url (str): The URL to fetch links from.
+            html (str, optional): The HTML content of the page.
 
         Returns:
-        set: Set of valid links found on the page.
+            set: Set of valid links found on the page.
         """
         logger.debug(f"Fetching links from {url}")
         try:
@@ -86,7 +91,15 @@ class Scraper:
             # Parse the content using BeautifulSoup
             soup = BeautifulSoup(content, "html.parser")
             # Extract all anchor tags and join the URLs
-            links = [urljoin(url, a.get("href")) for a in soup.find_all("a", href=True)]
+            links = []
+            for a in soup.find_all("a", href=True):
+                if isinstance(a, Tag):
+                    href = a.get("href")
+                    if href:
+                        if isinstance(href, list):
+                            href = href[0]
+                        links.append(urljoin(url, str(href)))
+
             # Remove fragments and filter valid links
             links = [
                 urldefrag(link)[0]
@@ -106,22 +119,24 @@ class Scraper:
         Log the scraping process and outcome.
 
         Args:
-        html (str): The HTML content of the page.
-        url (str): The URL to scrape.
+            html (str): The HTML content of the page.
+            url (str): The URL to scrape.
 
         Returns:
-        tuple: A tuple containing the extracted content and metadata of the page.
+            tuple: A tuple containing the extracted content and metadata of the page.
         """
         logger.info(f"Scraping page {url}")
 
         try:
-            metadata = trafilatura.metadata.extract_metadata(filecontent=html, default_url=url).as_dict()
-            
+            metadata = trafilatura.metadata.extract_metadata(
+                filecontent=html, default_url=url
+            ).as_dict()
+
             if "body" in metadata:
                 metadata.pop("body")
             if "commentsbody" in metadata:
                 metadata.pop("commentsbody")
-            
+
             markdown = (
                 trafilatura.extract(
                     html,
@@ -142,20 +157,21 @@ class Scraper:
 
     def start_scraping(self, url=None, urls_list=[]):
         """
-        Initiates the scraping process for a single URL or a list of URLs. It validates URLs,
-        logs the scraping process, and manages the progress of scraping through the database.
+        Initiates the scraping process for a single URL or a list of URLs.
+        It validates URLs, logs the scraping process, and manages the
+        progress of scraping through the database.
 
         Args:
             url (str, optional): A single URL to start scraping from. Defaults to None.
-            urls_list (list, optional): A list of URLs to scrape. Defaults to an empty list.
+            urls_list (list, optional): A list of URLs to scrape.
         """
         # Validate and insert the provided URLs into the database
         if urls_list:
             # Iterate through the list to check for valid URLs
-            for url in urls_list:
-                if not self.is_valid_link(url):
-                    logger.warning(f"Skipping invalid URL: {url}")
-                    urls_list.remove(url)  # Remove invalid URLs from the list
+            for url_item in urls_list:
+                if not self.is_valid_link(url_item):
+                    logger.warning(f"Skipping invalid URL: {url_item}")
+                    urls_list.remove(url_item)  # Remove invalid URLs from the list
 
             # Insert the validated list of URLs into the database
             self.db_manager.insert_link(urls_list)
@@ -197,7 +213,9 @@ class Scraper:
                     if request_count >= self.rate_limit:
                         sleep_time = 60 - elapsed_time
                         if sleep_time > 0:
-                            logger.debug(f"Rate limit reached, sleeping for {sleep_time} seconds")
+                            logger.debug(
+                                f"Rate limit reached, sleeping for {sleep_time} seconds"
+                            )
                             time.sleep(sleep_time)
                         # Reset the rate limit tracker
                         request_count = 0
@@ -205,7 +223,9 @@ class Scraper:
 
                 # Wait for the specified self.delay before making the next request
                 if self.delay > 0:
-                    logger.debug(f"self.delaying for {self.delay} seconds before next request")
+                    logger.debug(
+                        f"Delaying for {self.delay} seconds before next request"
+                    )
                     time.sleep(self.delay)
 
                 pbar.update(1)  # Update the progress bar
@@ -224,7 +244,8 @@ class Scraper:
                     # Mark the link as visited and log the reason for skipping
                     self.db_manager.mark_link_visited(url)
                     logger.info(
-                        f"Skipping link {url} due to invalid status code or content type"
+                        "Skipping link %s due to invalid status code or content type",
+                        url,
                     )
                     continue
 
@@ -237,7 +258,8 @@ class Scraper:
                 # Insert the scraped data into the database
                 self.db_manager.insert_page(url, content, json.dumps(metadata))
 
-                # Fetch and insert new links found on the page, if not working from a predefined list
+                # Fetch and insert new links found on the page,
+                # if not working from a predefined list
                 if not urls_list:
                     new_links = self.fetch_links(html=html, url=url)
 
@@ -246,7 +268,9 @@ class Scraper:
                     for new_url in new_links:
                         if self.db_manager.insert_link(new_url):
                             real_new_links_count += 1
-                            logger.debug(f"Inserted new link {new_url} into the database")
+                            logger.debug(
+                                f"Inserted new link {new_url} into the database"
+                            )
 
                     # Update the progress bar total with the count of new links
                     if real_new_links_count:
