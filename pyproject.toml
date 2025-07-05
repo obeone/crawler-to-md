@@ -2,13 +2,13 @@
 # For more information, see https://www.python.org/dev/peps/pep-0621/
 [project]
 name = "crawler-to-md"
-version = "0.1.0"
-description = "A tool to crawl web content and convert it to Markdown format."
+dynamic = ["version"]
+description = "Convert web content to Markdown & JSON files to fuel your GPTs and agent AI!"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
 authors = [
-    { name = "obeone", email = "obeone@obeone.org" }
+    { name = "Grégoire Compagnon (obeone)", email = "obeone@obeone.org" }
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -30,11 +30,15 @@ dependencies = [
     "mdformat_tables==1.0.0",
     "requests==2.32.3",
     "tqdm==4.67.1",
-    "trafilatura==2.0.0",
+    "markitdown==0.1.2",
     "coloredlogs==15.0.1",
     "beautifulsoup4==4.13.4",
     "argcomplete==3.3.0",
 ]
+
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme   = "no-local-version"
 
 # Optional dependencies for additional features or development
 # Uncomment and customize as needed
@@ -52,7 +56,7 @@ Bug_Tracker = "https://github.com/user/project/issues"
 
 # Build system configuration using setuptools
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=8"]
 build-backend = "setuptools.build_meta"
 
 # Setuptools package discovery configuration
