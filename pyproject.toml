@@ -51,8 +51,8 @@ crawler-to-md = "crawler_to_md.cli:main"
 
 # URLs related to the project repository and issue tracker
 [project.urls]
-Homepage = "https://github.com/user/project"
-Bug_Tracker = "https://github.com/user/project/issues"
+Homepage = "https://github.com/obeone/crawler-to-md"
+Bug_Tracker = "https://github.com/obeone/crawler-to-md/issues"
 
 # Build system configuration using setuptools
 [build-system]
