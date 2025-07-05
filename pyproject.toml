@@ -5,7 +5,7 @@ name = "crawler-to-md"
 dynamic = ["version"]
 description = "Convert web content to Markdown & JSON files to fuel your GPTs and agent AI!"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = "MIT"
 authors = [
     { name = "Grégoire Compagnon (obeone)", email = "obeone@obeone.org" }
@@ -15,7 +15,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Build Tools",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
