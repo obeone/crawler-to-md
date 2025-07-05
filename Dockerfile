@@ -13,7 +13,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Create a non-root user and group for enhanced security
 RUN groupadd --system --gid 1001 app && \
-    useradd --system --uid 1001 --gid 1001 app
+    useradd --system --uid 1001 --gid 1001 -m app
 
 # ==============================================================================
 # Builder Stage: Install system and Python dependencies with optimized caching
@@ -74,11 +74,11 @@ RUN --mount=type=cache,target=/var/cache/apt,id=apt-cache-${TARGETPLATFORM} \
 COPY --from=builder --chown=app:app /app /app
 
 # This must be done as root BEFORE switching to the non-root user
-RUN mkdir -p /app/cache && chown -R app:app /app/cache
+RUN mkdir -p /home/app/.cache/crawler-to-md && chown -R app:app /home/app/.cache/crawler-to-md
 
 # Switch to the non-root user for execution
 USER app
 
-VOLUME [ "/app/cache" ]
+VOLUME [ "/home/app/.cache/crawler-to-md" ]
 
 ENTRYPOINT [ "/app/.venv/bin/crawler-to-md" ]
