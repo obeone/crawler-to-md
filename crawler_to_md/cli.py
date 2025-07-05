@@ -48,7 +48,7 @@ def main():
         "--cache-folder",
         "-c",
         help="Cache folder for storing database",
-        default="./cache",
+        default="~/.cache/crawler-to-md",
     )
     parser.add_argument(
         "--base-url",
@@ -100,6 +100,9 @@ def main():
 
     args = parser.parse_args()
     logger.debug(f"Command line arguments parsed: {args}")
+
+    # Expand user path for cache folder
+    args.cache_folder = os.path.expanduser(args.cache_folder)
 
     # Read URLs from a file or stdin
     if args.urls_file:
