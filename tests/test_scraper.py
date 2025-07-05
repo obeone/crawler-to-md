@@ -28,6 +28,11 @@ def test_is_valid_link():
 
 
 def test_fetch_links():
+    """
+    Test that `fetch_links` extracts and filters valid links from HTML content.
+    
+    Verifies that only links within the base URL and not matching the exclude pattern are returned.
+    """
     db = DummyDB()
     scraper = Scraper(base_url='https://example.com', exclude_patterns=['/exclude'], db_manager=db)
     html = '''<html><body>
@@ -47,6 +52,11 @@ from unittest.mock import patch, MagicMock
 @patch('tempfile.NamedTemporaryFile')
 def test_scrape_page_parses_content_and_metadata(mock_tempfile, mock_os_remove):
     # Arrange
+    """
+    Test that `scrape_page` correctly parses HTML content, extracts metadata, and uses the markdown converter.
+    
+    Mocks file handling and the markdown converter to verify that the returned content contains the expected text and the metadata includes the correct page title.
+    """
     mock_file = MagicMock()
     mock_file.name = "dummy_path"
     mock_tempfile.return_value.__enter__.return_value = mock_file
@@ -68,6 +78,9 @@ def test_scrape_page_parses_content_and_metadata(mock_tempfile, mock_os_remove):
 @patch('tempfile.NamedTemporaryFile')
 def test_scrape_page_with_markitdown(mock_tempfile, mock_os_remove):
     # Arrange
+    """
+    Test that `scrape_page` correctly converts HTML to markdown using MarkItDown and extracts the page title as metadata.
+    """
     mock_file = MagicMock()
     mock_file.name = "dummy_path"
     mock_tempfile.return_value.__enter__.return_value = mock_file
@@ -124,6 +137,11 @@ class ListDB(DummyDB):
 
 
 def test_start_scraping_process(monkeypatch):
+    """
+    Test that the scraping process inserts, visits, and stores a page correctly using mocked dependencies.
+    
+    This test verifies that the scraper's `start_scraping` method interacts with the database as expected when all external dependencies (network requests, link extraction, page scraping, and progress bar) are mocked. It asserts that one link is inserted, marked as visited, and the page is stored with the correct URL.
+    """
     db = ListDB()
     scraper = Scraper(base_url='http://example.com', exclude_patterns=[], db_manager=db)
 

@@ -57,15 +57,16 @@ class Scraper:
 
     def fetch_links(self, url, html=None):
         """
-        Fetch all valid links from the given URL.
-        Log the fetching process and outcome.
-
-        Args:
-        url (str): The URL to fetch links from.
-        html (str, optional): The HTML content of the page.
-
+        Retrieve all valid links from a specified URL or provided HTML content.
+        
+        If HTML content is not provided, sends a GET request to the URL and parses the response. Extracts anchor tags, normalizes and filters links based on validity criteria, and returns a set of valid links. Returns an empty list if the request fails.
+        
+        Parameters:
+            url (str): The URL to extract links from.
+            html (str, optional): HTML content to parse instead of fetching from the URL.
+        
         Returns:
-        set: Set of valid links found on the page.
+            set: A set of valid, normalized links found on the page.
         """
         logger.debug(f"Fetching links from {url}")
         try:
@@ -101,15 +102,14 @@ class Scraper:
 
     def scrape_page(self, html, url):
         """
-        Scrape the content and metadata from the given URL.
-        Log the scraping process and outcome.
-
-        Args:
-        html (str): The HTML content of the page.
-        url (str): The URL to scrape.
-
+        Extracts the main content and page title from HTML, converting the content to Markdown format.
+        
+        Parameters:
+            html (str): The HTML content of the page.
+            url (str): The URL of the page being scraped.
+        
         Returns:
-        tuple: A tuple containing the extracted content and metadata of the page.
+            tuple: A tuple containing the Markdown-formatted content (str) and a metadata dictionary with the page title. Returns (None, None) if an error occurs during extraction.
         """
         logger.info(f"Scraping page {url}")
 
@@ -140,12 +140,9 @@ class Scraper:
 
     def start_scraping(self, url=None, urls_list=[]):
         """
-        Initiates the scraping process for a single URL or a list of URLs. It validates URLs,
-        logs the scraping process, and manages the progress of scraping through the database.
-
-        Args:
-            url (str, optional): A single URL to start scraping from. Defaults to None.
-            urls_list (list, optional): A list of URLs to scrape. Defaults to an empty list.
+        Start the scraping workflow from a single URL or a list of URLs, managing link validation, progress tracking, rate limiting, and database integration.
+        
+        If a list of URLs is provided, only valid URLs are processed. The method iteratively fetches unvisited links from the database, retrieves their content, extracts and stores page data and metadata, discovers new links (unless working from a predefined list), and marks links as visited. Progress is tracked with a progress bar, and optional rate limiting and request delays are enforced.
         """
         # Validate and insert the provided URLs into the database
         if urls_list:
