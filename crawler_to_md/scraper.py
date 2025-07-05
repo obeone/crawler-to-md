@@ -1,21 +1,16 @@
 import json
+import os
+import tempfile
 import time
 from urllib.parse import urldefrag, urljoin
 
 import requests
-import trafilatura
 from bs4 import BeautifulSoup, Tag
+from markitdown import MarkItDown
 from tqdm import tqdm
 
 from . import log_setup
-from markitdown import MarkItDown
-import json
 from .database_manager import DatabaseManager
-from tqdm import tqdm
-import time
-import tempfile
-import os
-
 
 logger = log_setup.get_logger()
 logger.name = "Scraper"
@@ -137,19 +132,21 @@ class Scraper:
         try:
             # Parse the content using BeautifulSoup
             soup = BeautifulSoup(html, "html.parser")
-            
+
             # Extract title from the page
             title = soup.title.string if soup.title else ""
-            
+
             metadata = {"title": title}
-            
+
             # Convert the HTML to Markdown
-            with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".html") as tmp:
+            with tempfile.NamedTemporaryFile(
+                mode="w+", delete=False, suffix=".html"
+            ) as tmp:
                 tmp.write(html)
                 tmp_path = tmp.name
-            
+
             markdown = str(MarkItDown().convert(tmp_path))
-            
+
             os.remove(tmp_path)
 
             logger.debug(f"Successfully scraped content and metadata from {url}")
