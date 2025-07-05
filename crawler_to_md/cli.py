@@ -118,7 +118,7 @@ def main():
 
 
     if not args.url and not urls_list:
-        raise ValueError("No URL provided. Please provide either --url or --urls-file.")
+        parser.error("No URL provided. Please provide either --url or --urls-file.")
 
     first_url = args.url if args.url else urls_list[0]
     output = os.path.join(args.output_folder, utils.url_to_filename(first_url))
@@ -158,13 +158,6 @@ def main():
         rate_limit=args.rate_limit,
         delay=args.delay,
     )
-    scraper = Scraper(
-        base_url=args.base_url,
-        exclude_patterns=args.exclude,
-        db_manager=db_manager,
-        rate_limit=args.rate_limit,
-        delay=args.delay,
-    )
     logger.info("Scraper initialized.")
 
     # Start the scraping process
@@ -192,7 +185,6 @@ def main():
             output_folder=output, base_url=args.base_url
         )
         logger.info("Export of individual Markdown files completed.")
-
 
     markdown_path = os.path.join(output, f"{output_name}.md")
     json_path = os.path.join(output, f"{output_name}.json")
