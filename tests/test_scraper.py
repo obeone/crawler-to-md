@@ -1,5 +1,10 @@
-from src.database_manager import DatabaseManager
-from src.scraper import Scraper
+from unittest.mock import MagicMock, patch
+
+import requests
+import tqdm
+
+from crawler_to_md.database_manager import DatabaseManager
+from crawler_to_md.scraper import Scraper
 
 
 class DummyDB(DatabaseManager):
@@ -21,7 +26,9 @@ class DummyDB(DatabaseManager):
 
 def test_is_valid_link():
     db = DummyDB()
-    scraper = Scraper(base_url='https://example.com', exclude_patterns=['/exclude'], db_manager=db)
+    scraper = Scraper(
+        base_url='https://example.com', exclude_patterns=['/exclude'], db_manager=db
+    )
     assert scraper.is_valid_link('https://example.com/page')
     assert not scraper.is_valid_link('https://example.com/exclude/page')
     assert not scraper.is_valid_link('https://other.com/')
@@ -29,7 +36,9 @@ def test_is_valid_link():
 
 def test_fetch_links():
     db = DummyDB()
-    scraper = Scraper(base_url='https://example.com', exclude_patterns=['/exclude'], db_manager=db)
+    scraper = Scraper(
+        base_url='https://example.com', exclude_patterns=['/exclude'], db_manager=db
+    )
     html = '''<html><body>
     <a href="https://example.com/page1">1</a>
     <a href="/page2">2</a>
@@ -39,9 +48,7 @@ def test_fetch_links():
     assert links == {'https://example.com/page1', 'https://example.com/page2'}
 
 
-from unittest.mock import patch, MagicMock
 
-...
 
 @patch('os.remove')
 @patch('tempfile.NamedTemporaryFile')
@@ -54,14 +61,16 @@ def test_scrape_page_parses_content_and_metadata(mock_tempfile, mock_os_remove):
     db = DummyDB()
     scraper = Scraper(base_url='http://example.com', exclude_patterns=[], db_manager=db)
     html = '<html><head><title>Test</title></head><body><p>Hello</p></body></html>'
-    
+
     # Act
-    with patch('src.scraper.MarkItDown') as mock_markdown:
+    with patch('crawler_to_md.scraper.MarkItDown') as mock_markdown:
         mock_markdown.return_value.convert.return_value = "Hello"
         content, metadata = scraper.scrape_page(html, 'http://example.com/test')
 
     # Assert
+    assert content is not None
     assert 'Hello' in content
+    assert metadata is not None
     assert metadata.get('title') == 'Test'
 
 @patch('os.remove')
@@ -71,23 +80,28 @@ def test_scrape_page_with_markitdown(mock_tempfile, mock_os_remove):
     mock_file = MagicMock()
     mock_file.name = "dummy_path"
     mock_tempfile.return_value.__enter__.return_value = mock_file
-    
+
     db = DummyDB()
     scraper = Scraper(base_url='http://example.com', exclude_patterns=[], db_manager=db)
-    html = '<html><head><title>Test</title></head><body><h1>A Title</h1><p>This is a paragraph with <strong>bold</strong> text.</p></body></html>'
-    
+    html = (
+        '<html><head><title>Test</title></head><body><h1>A Title</h1>'
+        '<p>This is a paragraph with <strong>bold</strong> text.</p></body></html>'
+    )
+
     # Act
-    with patch('src.scraper.MarkItDown') as mock_markdown:
-        mock_markdown.return_value.convert.return_value = "# A Title\n\nThis is a paragraph with **bold** text."
+    with patch('crawler_to_md.scraper.MarkItDown') as mock_markdown:
+        mock_markdown.return_value.convert.return_value = (
+            "# A Title\n\nThis is a paragraph with **bold** text."
+        )
         content, metadata = scraper.scrape_page(html, 'http://example.com/test')
 
     # Assert
+    assert content is not None
     assert content == '# A Title\n\nThis is a paragraph with **bold** text.'
+    assert metadata is not None
     assert metadata.get('title') == 'Test'
 
 
-import requests
-import tqdm
 
 class ListDB(DummyDB):
     def __init__(self):
@@ -128,7 +142,9 @@ def test_start_scraping_process(monkeypatch):
     scraper = Scraper(base_url='http://example.com', exclude_patterns=[], db_manager=db)
 
     monkeypatch.setattr(Scraper, 'fetch_links', lambda self, url, html=None: set())
-    monkeypatch.setattr(Scraper, 'scrape_page', lambda self, html, url: ('# MD', {'url': url}))
+    monkeypatch.setattr(
+        Scraper, 'scrape_page', lambda self, html, url: ('# MD', {'url': url})
+    )
 
     class DummyResp:
         status_code = 200

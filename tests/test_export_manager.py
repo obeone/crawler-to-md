@@ -1,8 +1,9 @@
+import json
 import os
 import tempfile
-import json
-from src.database_manager import DatabaseManager
-from src.export_manager import ExportManager
+
+from crawler_to_md.database_manager import DatabaseManager
+from crawler_to_md.export_manager import ExportManager
 
 
 def create_populated_db(tmpdir):
@@ -10,7 +11,9 @@ def create_populated_db(tmpdir):
     db = DatabaseManager(db_path)
     db.insert_link('http://example.com')
     db.mark_link_visited('http://example.com')
-    db.insert_page('http://example.com', '# Title\nParagraph', json.dumps({'author': 'John'}))
+    db.insert_page(
+        'http://example.com', '# Title\nParagraph', json.dumps({'author': 'John'})
+    )
     return db
 
 
@@ -79,9 +82,9 @@ def test_adjust_headers_upper_limit():
     exporter = ExportManager(db)
     content = '###### H6\n####### H7'
     adjusted = exporter._adjust_headers(content, level_increment=1)
-    lines = [l for l in adjusted.split('\n') if l.startswith('#')]
+    lines = [line for line in adjusted.split('\n') if line.startswith('#')]
     # both lines should not exceed 6 hashes
-    assert all(len(l.split()[0]) <= 6 for l in lines)
+    assert all(len(line.split()[0]) <= 6 for line in lines)
 
 
 def test_concatenate_skips_none_content():
