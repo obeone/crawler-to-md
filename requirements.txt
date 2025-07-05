@@ -5,6 +5,6 @@ mdformat_frontmatter==2.0.8
 mdformat_tables==1.0.0
 requests==2.32.3
 tqdm==4.67.1
-trafilatura==2.0.0
+markitdown==0.1.2
 coloredlogs==15.0.1
 beautifulsoup4==4.13.4
