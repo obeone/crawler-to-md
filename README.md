@@ -39,7 +39,7 @@ crawler-to-md --url https://www.example.com
 
 ## 📋 Requirements
 
-Python 3.9 or higher is required.
+Python 3.10 or higher is required.
 
 Project dependencies are managed with `pyproject.toml`. Install them with:
 
