@@ -8,6 +8,8 @@ on:
   workflow_dispatch:
   pull_request:
     types: [opened, synchronize, reopened, edited]
+  release:
+    types: [published]
 
 jobs:
   build-and-push:
@@ -32,6 +34,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set Docker image tags and build args
+        id: docker_tags
+        run: |
+          TAGS="ghcr.io/obeone/crawler-to-md:latest\ndocker.io/obeoneorg/crawler-to-md:latest"
+          if [ "${{ github.event_name }}" = "release" ] && [ -n "${{ github.event.release.tag_name }}" ]; then
+            TAGS="$TAGS\nghcr.io/obeone/crawler-to-md:${{ github.event.release.tag_name }}\ndocker.io/obeoneorg/crawler-to-md:${{ github.event.release.tag_name }}"
+          fi
+
+          APP_VERSION=0.0.0
+          if [ "${{ github.event_name }}" = "release" ] && [ -n "${{ github.event.release.tag_name }}" ]; then
+            APP_VERSION=${{ github.event.release.tag_name }}
+          fi
+
+          echo "tags<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$TAGS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          echo "build_args<<EOF" >> $GITHUB_OUTPUT
+          echo -e "APP_VERSION=$APP_VERSION" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+
       - name: Log in to Docker Hub
         if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         uses: docker/login-action@v2
@@ -46,12 +70,11 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          push: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch') || github.event_name == 'release' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          tags: |
-            ghcr.io/obeone/crawler-to-md:latest
-            docker.io/obeoneorg/crawler-to-md:latest
+          tags: ${{ steps.docker_tags.outputs.tags }}
+          build-args: ${{ steps.docker_tags.outputs.build_args }}
           platforms: linux/amd64,linux/arm64
 
       - name: Set up cosign
@@ -67,7 +90,7 @@ jobs:
           COSIGN_EXPERIMENTAL: true
           DIGEST: ${{ steps.docker_build.outputs.digest }}
 
-      - name: Updage Docker Hub description
+      - name: Update Docker Hub description
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: peter-evans/dockerhub-description@v4
         with:
