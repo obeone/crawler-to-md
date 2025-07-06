@@ -68,8 +68,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGE
     apt-get update && \
     apt-get install -y --no-install-recommends \
     libxml2 \
-    libxslt1.1 \
-    libtk8.6
+    libxslt1.1
 
 # Copy the virtual environment and source code from previous stages
 # The source code is already in the builder stage, no need for another COPY . .
