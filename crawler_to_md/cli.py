@@ -88,6 +88,18 @@ def main():
         help="Delay between requests in seconds",
         default=0,
     )
+    parser.add_argument(
+        "--no-markdown",
+        action="store_true",
+        help="Disable generation of the compiled Markdown file",
+        default=False,
+    )
+    parser.add_argument(
+        "--no-json",
+        action="store_true",
+        help="Disable generation of the compiled JSON file",
+        default=False,
+    )
 
     try:
         import argcomplete
@@ -174,12 +186,13 @@ def main():
     logger.info("ExportManager initialized.")
 
 
-    export_manager.export_to_markdown(os.path.join(output, f"{output_name}.md"))
-    logger.info("Export to markdown completed.")
+    if not args.no_markdown:
+        export_manager.export_to_markdown(os.path.join(output, f"{output_name}.md"))
+        logger.info("Export to markdown completed.")
 
-
-    export_manager.export_to_json(os.path.join(output, f"{output_name}.json"))
-    logger.info("Export to JSON completed.")
+    if not args.no_json:
+        export_manager.export_to_json(os.path.join(output, f"{output_name}.json"))
+        logger.info("Export to JSON completed.")
 
     output_folder_ei = None
     if args.export_individual:
@@ -191,8 +204,10 @@ def main():
 
     markdown_path = os.path.join(output, f"{output_name}.md")
     json_path = os.path.join(output, f"{output_name}.json")
-    print("\033[94mMarkdown file generated at: \033[0m", markdown_path)
-    print("\033[92mJSON file generated at: \033[0m", json_path)
+    if not args.no_markdown:
+        print("\033[94mMarkdown file generated at: \033[0m", markdown_path)
+    if not args.no_json:
+        print("\033[92mJSON file generated at: \033[0m", json_path)
     if args.export_individual and output_folder_ei:
         print(
             "\033[95mIndividual Markdown files exported to: \033[0m",
