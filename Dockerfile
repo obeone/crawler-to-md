@@ -27,7 +27,8 @@ ARG TARGETPLATFORM
 ARG APP_VERSION=0.0.0
 
 # Install build-time system dependencies using BuildKit cache mounts
-RUN --mount=type=cache,target=/var/cache/apt,id=apt-cache-${TARGETPLATFORM} \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGETPLATFORM} \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked,id=apt-cache-${TARGETPLATFORM} \
     apt-get update && \
     apt-get install -y --no-install-recommends \
     libxml2-dev \
@@ -62,7 +63,8 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 # Install only essential runtime system dependencies
 ARG TARGETPLATFORM
-RUN --mount=type=cache,target=/var/cache/apt,id=apt-cache-${TARGETPLATFORM} \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGETPLATFORM} \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked,id=apt-cache-${TARGETPLATFORM} \
     apt-get update && \
     apt-get install -y --no-install-recommends \
     libxml2 \
