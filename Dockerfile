@@ -1,59 +1,84 @@
-# Use Dockerfile syntax version 1.5 for compatibility and new features
-# syntax=docker/dockerfile:1.5
+# syntax=docker/dockerfile:1
 
-FROM python:3.13 AS builder
+# ==============================================================================
+# Base Stage: Installs uv and creates a non-root user for security
+# ==============================================================================
+FROM python:3.13-slim AS base
 
-# Set non-interactive mode
-ENV DEBIAN_FRONTEND=noninteractive
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
 
-# Prevent docker from cleaning up the apt cache
-RUN rm -f /etc/apt/apt.conf.d/docker-clean
+# Install uv, the modern Python package manager
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Define ARG for platform-specific cache separation
+# Create a non-root user and group for enhanced security
+RUN groupadd --system --gid 1001 app && \
+    useradd --system --uid 1001 --gid 1001 -m app
+
+# ==============================================================================
+# Builder Stage: Install system and Python dependencies with optimized caching
+# ==============================================================================
+FROM base AS builder
+
+# Argument for multi-platform builds
 ARG TARGETPLATFORM
 
-# Update and install dependencies with cache separated by architecture
+# CORRECTION: Argument to receive the application version from the host
+ARG APP_VERSION=0.0.0
+
+# Install build-time system dependencies using BuildKit cache mounts
 RUN --mount=type=cache,target=/var/cache/apt,id=apt-cache-${TARGETPLATFORM} \
-    --mount=type=cache,target=/var/lib/apt,id=apt-lib-${TARGETPLATFORM} \
     apt-get update && \
-    apt-get install --no-install-recommends -y libxml2-dev libxslt-dev
+    apt-get install -y --no-install-recommends \
+    libxml2-dev \
+    libxslt-dev
 
 WORKDIR /app
 
-COPY requirements.txt .
+# Grant ownership to the non-root user before using it
+RUN --mount=type=cache,target=/home/app/.cache/uv,uid=1001,gid=1001 \
+    chown -R app:app /app /home/app/.cache/uv
 
-# Use pip cache to speed up builds
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -r requirements.txt -t packages
+USER app
 
-# Start from a slim Python 3.12 image for a small final image size
-FROM python:3.13-slim AS final
+# Copy source code BEFORE installing dependencies, as setuptools-scm needs it
+COPY --chown=app:app . .
 
-# Set non-interactive mode
-ENV DEBIAN_FRONTEND=noninteractive
+# CORRECTION: Pass the version to setuptools-scm via an environment variable
+# This tells setuptools-scm to use this version string instead of looking for .git
+RUN --mount=type=cache,target=/home/app/.cache/uv,uid=1001,gid=1001 \
+    SETUPTOOLS_SCM_PRETEND_VERSION=${APP_VERSION} \
+    uv sync
 
-# Prevent docker from cleaning up the apt cache in the final image
-RUN rm -f /etc/apt/apt.conf.d/docker-clean
-
-ARG TARGETPLATFORM
-
-# Copy built packages from the previous stage
-COPY --from=builder /app/packages /app/packages
-
-# Update and install runtime dependencies if necessary, with cache separated by architecture
-RUN --mount=type=cache,target=/var/cache/apt,id=apt-cache-${TARGETPLATFORM} \
-    --mount=type=cache,target=/var/lib/apt,id=apt-lib-${TARGETPLATFORM} \
-    apt-get update && \
-    apt-get full-upgrade -y && \
-    apt-get install -y --no-install-recommends libxml2 libxslt1.1 libtk8.6
+# ==============================================================================
+# Final Stage: Assemble the lean production image
+# ==============================================================================
+FROM base AS final
 
 WORKDIR /app
 
-ENV PYTHONPATH=/app/packages:$PYTHONPATH
+# Activate the virtual environment by adding it to the PATH
+ENV PATH="/app/.venv/bin:$PATH"
 
-# Copy the rest of the application's source code into the working directory
-COPY . .
+# Install only essential runtime system dependencies
+ARG TARGETPLATFORM
+RUN --mount=type=cache,target=/var/cache/apt,id=apt-cache-${TARGETPLATFORM} \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+    libxml2 \
+    libxslt1.1 \
+    libtk8.6
 
-VOLUME [ "/app/cache"]
+# Copy the virtual environment and source code from previous stages
+# The source code is already in the builder stage, no need for another COPY . .
+COPY --from=builder --chown=app:app /app /app
 
-ENTRYPOINT [ "python", "main.py" ]
+# This must be done as root BEFORE switching to the non-root user
+RUN mkdir -p /home/app/.cache/crawler-to-md && chown -R app:app /home/app/.cache/crawler-to-md
+
+# Switch to the non-root user for execution
+USER app
+
+VOLUME [ "/home/app/.cache/crawler-to-md" ]
+
+ENTRYPOINT [ "/app/.venv/bin/crawler-to-md" ]

@@ -1,6 +1,7 @@
 import os
 import tempfile
-from src.database_manager import DatabaseManager
+
+from crawler_to_md.database_manager import DatabaseManager
 
 
 def test_database_operations():

@@ -1,5 +1,6 @@
 import pytest
-from src import utils
+
+from crawler_to_md import utils
 
 
 def test_randomstring_to_filename():

@@ -1,7 +1,7 @@
 # log_config.py
 import logging
 from logging import Logger
-from math import exp
+
 import coloredlogs
 from tqdm import tqdm
 
@@ -10,14 +10,15 @@ logger = Logger("tmp")
 class TqdmHandler(logging.StreamHandler):
     """
     Custom logging handler utilizing tqdm for progress bar support in logging.
-    This handler allows log messages to be displayed over tqdm progress bars without interrupting them.
+    This handler allows log messages to be displayed over tqdm progress bars without
+    interrupting them.
     """
     def emit(self, record):
         """
         Emit a log record.
 
-        Logs are emitted using tqdm.write to ensure compatibility with tqdm progress bars,
-        preventing them from being disrupted by log messages.
+        Logs are emitted using tqdm.write to ensure compatibility with tqdm progress
+        bars, preventing them from being disrupted by log messages.
 
         Args:
             record (logging.LogRecord): The log record to be emitted.
@@ -35,14 +36,16 @@ def setup_logging(log_level: str = "WARN"):
     """
     Sets up logging with a custom handler and formatter.
 
-    This function configures the root logger to use a TqdmHandler for output, allowing log messages
-    to be displayed over tqdm progress bars. It also uses coloredlogs for colored log output.
+    This function configures the root logger to use a TqdmHandler for output, allowing
+    log messages to be displayed over tqdm progress bars. It also uses coloredlogs for
+    colored log output.
 
     Args:
-        log_level (str, optional): The minimum log level for messages to be handled. Defaults to "WARN".
+        log_level (str, optional): The minimum log level for messages to be handled.
+        Defaults to "WARN".
     """
     global logger
-    
+
     # Get the root logger
     logger = logging.getLogger()
     # Create an instance of the custom TqdmHandler
@@ -50,7 +53,10 @@ def setup_logging(log_level: str = "WARN"):
     # Define a formatter with a specific format string, including colored output
     # Updated to show the filename and line number instead of hostname
     formatter = coloredlogs.ColoredFormatter(
-        "%(asctime)s %(filename)s:%(lineno)d %(name)s[%(process)d] %(levelname)s %(message)s"
+        (
+            "%(asctime)s %(filename)s:%(lineno)d %(name)s[%(process)d] "
+            "%(levelname)s %(message)s"
+        )
     )
     # Set the formatter for the handler
     handler.setFormatter(formatter)
@@ -64,11 +70,11 @@ def setup_logging(log_level: str = "WARN"):
 def get_logger():
     """
     Returns the global logger instance.
-    
+
     Returns:
         logging.Logger: The global logger instance.
     """
     if logger is None:
         setup_logging()
-    
+
     return logger

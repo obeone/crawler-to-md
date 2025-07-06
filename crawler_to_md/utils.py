@@ -1,26 +1,29 @@
-from . import log_setup  # Add log messages
 from urllib.parse import urlparse, urlunparse
+
+from . import log_setup
 
 logger = log_setup.get_logger()
 logger.name = "utils"
+
 
 def randomstring_to_filename(random_string):
     """
     Convert a random string to a valid filename.
 
     Args:
-    random_string (str): The input random string.
+        random_string (str): The input random string.
 
     Returns:
-    str: The converted filename.
+        str: The converted filename.
     """
     # Sanitize characters that are not A-Za-z0-9_-
     valid_chars = "-_."
-    filename = "".join(c if c.isalnum() or c in valid_chars else "_" if c == " " else "" for c in random_string)
+    filename = "".join(
+        c if c.isalnum() or c in valid_chars else "_" if c == " " else ""
+        for c in random_string
+    )
 
     return filename
-
-
 
 
 def url_to_filename(url):
@@ -28,10 +31,10 @@ def url_to_filename(url):
     Convert a URL to a valid filename, ensuring it is a string type to avoid TypeError.
 
     Args:
-    url (str): The input URL.
+        url (str): The input URL.
 
     Returns:
-    str: The converted filename.
+        str: The converted filename.
     """
     # Ensure the URL is a string to prevent TypeError when performing string operations
     if not isinstance(url, str):
@@ -40,7 +43,8 @@ def url_to_filename(url):
     parsed_url = urlparse(url)
     logger.debug(f"Parsing URL: {url}")  # Log the URL being parsed
 
-    # Combine the network location and path, replacing slashes and periods with underscores
+    # Combine the network location and path,
+    # replacing slashes and periods with underscores
     base_filename = parsed_url.netloc + parsed_url.path
     filename = base_filename.replace("/", "_").replace(".", "_")
 
@@ -55,10 +59,10 @@ def url_dirname(url):
     Extracts the directory name from the URL.
 
     Args:
-    url (str): The input URL.
+        url (str): The input URL.
 
     Returns:
-    str: The URL with the last path segment removed and ending with '/'.
+        str: The URL with the last path segment removed and ending with '/'.
     """
     parsed_url = urlparse(url)
     logger.debug(f"Parsing URL: {url}")  # Add log message
@@ -91,10 +95,10 @@ def deduplicate_list(input_list):
     Deduplicates a list while preserving the original order of elements.
 
     Args:
-    input_list (list): The input list to be deduplicated.
+        input_list (list): The input list to be deduplicated.
 
     Returns:
-    list: The deduplicated list.
+        list: The deduplicated list.
     """
     seen = set()
     deduplicated_list = [x for x in input_list if not (x in seen or seen.add(x))]
