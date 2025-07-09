@@ -19,13 +19,9 @@ logger.name = "main"
 
 def main():
     """
-    Main function to start the web scraper application.
-
-    This function parses command line arguments, initializes necessary components,
-    and manages the scraping and exporting process.
-
-    Raises:
-        ValueError: If neither a URL nor a URLs file is provided.
+    Parses command-line arguments and orchestrates the web scraping, data storage, and export process.
+    
+    This function serves as the main entry point for the web scraper application. It handles argument parsing, initializes required components, manages the scraping workflow, and exports the results to Markdown and JSON formats as specified by the user. The function ensures necessary directories exist, validates input, and provides user feedback on output locations.
     """
     logger.info("Starting the web scraper application.")
 

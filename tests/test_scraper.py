@@ -138,6 +138,11 @@ class ListDB(DummyDB):
 
 
 def test_start_scraping_process(monkeypatch):
+    """
+    Test the complete scraping process, verifying link tracking, page storage, and integration with mocked dependencies.
+    
+    This test ensures that the `Scraper.start_scraping()` method correctly inserts and marks links as visited, stores scraped page content, and interacts properly with mocked HTTP requests and progress tracking.
+    """
     db = ListDB()
     scraper = Scraper(base_url='http://example.com', exclude_patterns=[], db_manager=db)
 
@@ -156,6 +161,12 @@ def test_start_scraping_process(monkeypatch):
 
     class DummyTqdm:
         def __init__(self, *a, **k):
+            """
+            Initialize the dummy progress bar with an optional total count.
+            
+            Parameters:
+            	total (int, optional): The total number of items to track. Defaults to 0.
+            """
             self.total = k.get('total', 0)
         def update(self, n):
             pass
@@ -174,6 +185,9 @@ def test_start_scraping_process(monkeypatch):
 
 
 def test_scraper_proxy_initialization():
+    """
+    Test that the Scraper initializes its session with the correct HTTP and HTTPS proxy settings when a proxy URL is provided.
+    """
     db = DummyDB()
     scraper = Scraper(
         base_url='http://example.com', exclude_patterns=[], db_manager=db, proxy='http://proxy:8080'

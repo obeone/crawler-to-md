@@ -40,12 +40,20 @@ def test_cli_default_exports(monkeypatch, tmp_path):
 
 
 def test_cli_disable_exports(monkeypatch, tmp_path):
+    """
+    Test that disabling both markdown and JSON exports via CLI flags prevents export methods from being called.
+    """
     calls = _run_cli(monkeypatch, tmp_path, ["--no-markdown", "--no-json"])
     assert calls["md"] is False
     assert calls["json"] is False
 
 
 def test_cli_proxy_option(monkeypatch, tmp_path):
+    """
+    Test that the CLI correctly passes the --proxy option to the Scraper constructor.
+    
+    Verifies that when the CLI is invoked with a proxy URL, the Scraper instance receives the correct proxy argument.
+    """
     captured = {}
 
     def fake_init(
@@ -57,6 +65,17 @@ def test_cli_proxy_option(monkeypatch, tmp_path):
         delay=0,
         proxy=None,
     ):
+        """
+        A replacement initializer for the Scraper class that captures the value of the 'proxy' argument for testing purposes.
+        
+        Parameters:
+            base_url: The base URL for scraping.
+            exclude_patterns: Patterns to exclude from scraping.
+            db_manager: Database manager instance.
+            rate_limit: Optional rate limit for requests.
+            delay: Optional delay between requests.
+            proxy: Proxy URL to be captured for verification in tests.
+        """
         captured['proxy'] = proxy
 
     monkeypatch.setattr(Scraper, '__init__', fake_init)

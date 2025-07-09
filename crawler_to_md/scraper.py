@@ -27,16 +27,14 @@ class Scraper:
         proxy=None,
     ):
         """
-        Initialize the Scraper object.
-        Log the initialization process.
-
-        Args:
-            base_url (str): The base URL to start scraping from.
-            exclude_patterns (list): List of patterns to exclude from scraping.
-            db_manager (DatabaseManager): The database manager object.
-            rate_limit (int): Maximum number of requests per minute.
-            delay (float): Delay between requests in seconds.
-            proxy (str, optional): Proxy URL for HTTP requests.
+        Initializes a Scraper instance with base URL, exclusion patterns, database manager, and optional rate limiting, delay, and proxy settings.
+        
+        Parameters:
+            base_url (str): The root URL from which scraping begins.
+            exclude_patterns (list): URL patterns to exclude from scraping.
+            rate_limit (int): Maximum number of requests allowed per minute.
+            delay (float): Time in seconds to wait between requests.
+            proxy (str, optional): Proxy URL to route HTTP requests through.
         """
         logger.debug(f"Initializing Scraper with base URL: {base_url}")
         self.base_url = base_url
@@ -51,14 +49,15 @@ class Scraper:
 
     def is_valid_link(self, link):
         """
-        Check if the given link is valid for scraping.
-        Log the result of the validation.
-
-        Args:
-            link (str): The link to be checked.
-
+        Determine whether a given URL is eligible for scraping based on the base URL and exclusion patterns.
+        
+        A link is considered valid if it starts with the configured base URL and does not contain any of the specified exclusion patterns.
+        
+        Parameters:
+            link (str): The URL to validate.
+        
         Returns:
-            bool: True if the link is valid, False otherwise.
+            bool: True if the link is valid for scraping; False otherwise.
         """
         valid = True
         if self.base_url and not link.startswith(self.base_url):
@@ -71,15 +70,16 @@ class Scraper:
 
     def fetch_links(self, url, html=None):
         """
-        Fetch all valid links from the given URL.
-        Log the fetching process and outcome.
-
-        Args:
-            url (str): The URL to fetch links from.
-            html (str, optional): The HTML content of the page.
-
+        Retrieve all valid links from a specified URL or provided HTML content.
+        
+        If HTML is not provided, the method fetches the page content using an HTTP GET request. Extracts and resolves all anchor tag links, removes URL fragments, and filters them using the link validation logic. Returns a set of valid links found on the page. Returns an empty list if the request fails.
+         
+        Parameters:
+            url (str): The URL to extract links from.
+            html (str, optional): HTML content to parse instead of fetching from the URL.
+        
         Returns:
-            set: Set of valid links found on the page.
+            set: A set of valid, filtered links found on the page, or an empty set if none are found or on error.
         """
         logger.debug(f"Fetching links from {url}")
         try:
@@ -164,14 +164,9 @@ class Scraper:
 
     def start_scraping(self, url=None, urls_list=[]):
         """
-        Initiates the scraping process for a single URL or a list of URLs.
-        It validates URLs, logs the scraping process, and manages the
-        progress of scraping through the database.
-
-        Args:
-            url (str, optional): A single URL to start scraping from. Defaults to None.
-            urls_list (list, optional): A list of URLs to scrape.
-        """
+        Starts the web scraping process from a given URL or list of URLs, managing progress, rate limiting, and database integration.
+        
+        If a list of URLs is provided, only valid URLs are inserted into the database; otherwise, a single URL is used as the starting point. The method iteratively fetches unvisited links from the database, retrieves and processes each page, stores scraped content and metadata, and discovers new links to continue scraping (unless a predefined list is used). Progress is tracked with a progress bar, and rate limiting and delays are enforced as configured. The process continues until all discovered links have been visited.
         # Validate and insert the provided URLs into the database
         if urls_list:
             # Iterate through the list to check for valid URLs
