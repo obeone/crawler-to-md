@@ -173,7 +173,13 @@ class Scraper:
 
             os.remove(tmp_path)
 
-            logger.debug(f"Successfully scraped content and metadata from {url}")
+            if not markdown.strip():
+                logger.warning("No content scraped from %s", url)
+                return None, None
+
+            logger.debug(
+                "Successfully scraped content and metadata from %s", url
+            )
             return markdown, metadata
 
         except Exception as e:

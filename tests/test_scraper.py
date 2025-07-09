@@ -205,3 +205,16 @@ def test_scraper_proxy_failure_detection(monkeypatch):
         Scraper(
             base_url='http://example.com', exclude_patterns=[], db_manager=db, proxy='http://proxy:8080'
         )
+
+
+def test_scrape_page_returns_none_for_empty_content(monkeypatch):
+    db = DummyDB()
+    scraper = Scraper(base_url='http://example.com', exclude_patterns=[], db_manager=db)
+    html = '<html><body></body></html>'
+
+    with patch('crawler_to_md.scraper.MarkItDown') as mock_markdown:
+        mock_markdown.return_value.convert.return_value = ''
+        content, metadata = scraper.scrape_page(html, 'http://example.com/empty')
+
+    assert content is None
+    assert metadata is None
