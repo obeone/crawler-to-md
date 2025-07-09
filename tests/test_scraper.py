@@ -152,7 +152,7 @@ def test_start_scraping_process(monkeypatch):
         content = b'<html></html>'
         text = '<html></html>'
 
-    monkeypatch.setattr(requests, 'get', lambda url: DummyResp())
+    monkeypatch.setattr(scraper.session, 'get', lambda url: DummyResp())
 
     class DummyTqdm:
         def __init__(self, *a, **k):
@@ -171,3 +171,12 @@ def test_start_scraping_process(monkeypatch):
     assert db.get_links_count() == 1
     assert db.get_visited_links_count() == 1
     assert db.pages[0][0] == 'http://example.com/page'
+
+
+def test_scraper_proxy_initialization():
+    db = DummyDB()
+    scraper = Scraper(
+        base_url='http://example.com', exclude_patterns=[], db_manager=db, proxy='http://proxy:8080'
+    )
+    assert scraper.session.proxies.get('http') == 'http://proxy:8080'
+    assert scraper.session.proxies.get('https') == 'http://proxy:8080'

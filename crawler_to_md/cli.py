@@ -89,6 +89,11 @@ def main():
         default=0,
     )
     parser.add_argument(
+        "--proxy",
+        help="Proxy URL for HTTP requests",
+        default=None,
+    )
+    parser.add_argument(
         "--no-markdown",
         action="store_true",
         help="Disable generation of the compiled Markdown file",
@@ -172,6 +177,7 @@ def main():
         db_manager=db_manager,
         rate_limit=args.rate_limit,
         delay=args.delay,
+        proxy=args.proxy,
     )
     logger.info("Scraper initialized.")
 

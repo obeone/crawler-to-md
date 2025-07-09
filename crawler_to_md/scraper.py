@@ -24,6 +24,7 @@ class Scraper:
         db_manager: DatabaseManager,
         rate_limit=0,
         delay=0,
+        proxy=None,
     ):
         """
         Initialize the Scraper object.
@@ -35,6 +36,7 @@ class Scraper:
             db_manager (DatabaseManager): The database manager object.
             rate_limit (int): Maximum number of requests per minute.
             delay (float): Delay between requests in seconds.
+            proxy (str, optional): Proxy URL for HTTP requests.
         """
         logger.debug(f"Initializing Scraper with base URL: {base_url}")
         self.base_url = base_url
@@ -42,6 +44,10 @@ class Scraper:
         self.db_manager = db_manager
         self.rate_limit = rate_limit
         self.delay = delay
+        self.session = requests.Session()
+        if proxy:
+            self.session.proxies.update({"http": proxy, "https": proxy})
+        self.proxy = proxy
 
     def is_valid_link(self, link):
         """
@@ -79,7 +85,7 @@ class Scraper:
         try:
             if not html:
                 # Send a GET request to the URL
-                response = requests.get(url)
+                response = self.session.get(url)
                 if response.status_code != 200:
                     logger.warning(
                         f"Failed to fetch {url} with status code {response.status_code}"
@@ -233,7 +239,7 @@ class Scraper:
                 url = link[0]  # Extract the URL from the link tuple
 
                 # Attempt to fetch the page content
-                response = requests.get(url)
+                response = self.session.get(url)
 
                 # Increment request count for rate limiting
                 request_count += 1

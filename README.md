@@ -52,7 +52,7 @@ pip install .
 Start scraping with the following command:
 
 ```shell
-crawler-to-md --url <URL> [--output-folder ./output] [--cache-folder ./cache] [--base-url <BASE_URL>] [--exclude <KEYWORD_IN_URL>] [--title <TITLE>] [--urls-file <URLS_FILE>]
+crawler-to-md --url <URL> [--output-folder ./output] [--cache-folder ./cache] [--base-url <BASE_URL>] [--exclude <KEYWORD_IN_URL>] [--title <TITLE>] [--urls-file <URLS_FILE>] [--proxy <PROXY_URL>]
 ```
 
 Options:
@@ -67,6 +67,7 @@ Options:
 - `--export-individual`, `-ei`: Export each page as an individual Markdown file. 📝
 - `--rate-limit`, `-rl`: Maximum number of requests per minute (default: 0, no rate limit). ⏱️
 - `--delay`, `-d`: Delay between requests in seconds (default: 0, no delay). 🕒
+- `--proxy`: Proxy URL for HTTP requests. 🌐
 
 One of the `--url` or `--urls-file` options is required.
 
