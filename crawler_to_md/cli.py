@@ -90,6 +90,7 @@ def main():
     )
     parser.add_argument(
         "--proxy",
+        "-p",
         help="Proxy URL for HTTP or SOCKS requests",
         default=None,
     )
@@ -171,14 +172,17 @@ def main():
     db_manager = DatabaseManager(db_path)
     logger.info("DatabaseManager initialized.")
 
-    scraper = Scraper(
-        base_url=args.base_url,
-        exclude_patterns=args.exclude,
-        db_manager=db_manager,
-        rate_limit=args.rate_limit,
-        delay=args.delay,
-        proxy=args.proxy,
-    )
+    try:
+        scraper = Scraper(
+            base_url=args.base_url,
+            exclude_patterns=args.exclude,
+            db_manager=db_manager,
+            rate_limit=args.rate_limit,
+            delay=args.delay,
+            proxy=args.proxy,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
     logger.info("Scraper initialized.")
 
     # Start the scraping process

@@ -37,6 +37,9 @@ class Scraper:
             rate_limit (int): Maximum number of requests per minute.
             delay (float): Delay between requests in seconds.
             proxy (str, optional): Proxy URL for HTTP or SOCKS requests.
+
+        Raises:
+            ValueError: If a proxy is provided but unreachable.
         """
         logger.debug(f"Initializing Scraper with base URL: {base_url}")
         self.base_url = base_url
@@ -48,6 +51,21 @@ class Scraper:
         if proxy:
             self.session.proxies.update({"http": proxy, "https": proxy})
         self.proxy = proxy
+
+        if proxy:
+            self._test_proxy()
+
+    def _test_proxy(self):
+        """
+        Ensure the configured proxy is reachable.
+
+        Raises:
+            ValueError: If the proxy cannot fetch the base URL.
+        """
+        try:
+            self.session.head(self.base_url, timeout=5)
+        except requests.RequestException as exc:
+            raise ValueError(f"Proxy unreachable: {exc}") from exc
 
     def is_valid_link(self, link):
         """
