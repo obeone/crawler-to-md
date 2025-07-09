@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
 import requests
 import tqdm
 
@@ -152,7 +153,7 @@ def test_start_scraping_process(monkeypatch):
         content = b'<html></html>'
         text = '<html></html>'
 
-    monkeypatch.setattr(requests, 'get', lambda url: DummyResp())
+    monkeypatch.setattr(scraper.session, 'get', lambda url: DummyResp())
 
     class DummyTqdm:
         def __init__(self, *a, **k):
@@ -171,3 +172,49 @@ def test_start_scraping_process(monkeypatch):
     assert db.get_links_count() == 1
     assert db.get_visited_links_count() == 1
     assert db.pages[0][0] == 'http://example.com/page'
+
+
+def test_scraper_proxy_initialization(monkeypatch):
+    db = DummyDB()
+    monkeypatch.setattr(Scraper, '_test_proxy', lambda self: None)
+    scraper = Scraper(
+        base_url='http://example.com', exclude_patterns=[], db_manager=db, proxy='http://proxy:8080'
+    )
+    assert scraper.session.proxies.get('http') == 'http://proxy:8080'
+    assert scraper.session.proxies.get('https') == 'http://proxy:8080'
+
+
+def test_scraper_socks_proxy_initialization(monkeypatch):
+    db = DummyDB()
+    proxy = 'socks5://localhost:9050'
+    monkeypatch.setattr(Scraper, '_test_proxy', lambda self: None)
+    scraper = Scraper(
+        base_url='http://example.com', exclude_patterns=[], db_manager=db, proxy=proxy
+    )
+    assert scraper.session.proxies.get('http') == proxy
+    assert scraper.session.proxies.get('https') == proxy
+
+
+def test_scraper_proxy_failure_detection(monkeypatch):
+    db = DummyDB()
+    def fake_head(self, url, timeout=5):
+        raise requests.exceptions.ProxyError("fail")
+
+    monkeypatch.setattr(requests.Session, 'head', fake_head)
+    with pytest.raises(ValueError):
+        Scraper(
+            base_url='http://example.com', exclude_patterns=[], db_manager=db, proxy='http://proxy:8080'
+        )
+
+
+def test_scrape_page_returns_none_for_empty_content(monkeypatch):
+    db = DummyDB()
+    scraper = Scraper(base_url='http://example.com', exclude_patterns=[], db_manager=db)
+    html = '<html><body></body></html>'
+
+    with patch('crawler_to_md.scraper.MarkItDown') as mock_markdown:
+        mock_markdown.return_value.convert.return_value = ''
+        content, metadata = scraper.scrape_page(html, 'http://example.com/empty')
+
+    assert content is None
+    assert metadata is None

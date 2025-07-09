@@ -24,6 +24,7 @@ class Scraper:
         db_manager: DatabaseManager,
         rate_limit=0,
         delay=0,
+        proxy=None,
     ):
         """
         Initialize the Scraper object.
@@ -35,6 +36,10 @@ class Scraper:
             db_manager (DatabaseManager): The database manager object.
             rate_limit (int): Maximum number of requests per minute.
             delay (float): Delay between requests in seconds.
+            proxy (str, optional): Proxy URL for HTTP or SOCKS requests.
+
+        Raises:
+            ValueError: If a proxy is provided but unreachable.
         """
         logger.debug(f"Initializing Scraper with base URL: {base_url}")
         self.base_url = base_url
@@ -42,6 +47,25 @@ class Scraper:
         self.db_manager = db_manager
         self.rate_limit = rate_limit
         self.delay = delay
+        self.session = requests.Session()
+        if proxy:
+            self.session.proxies.update({"http": proxy, "https": proxy})
+        self.proxy = proxy
+
+        if proxy:
+            self._test_proxy()
+
+    def _test_proxy(self):
+        """
+        Ensure the configured proxy is reachable.
+
+        Raises:
+            ValueError: If the proxy cannot fetch the base URL.
+        """
+        try:
+            self.session.head(self.base_url, timeout=5)
+        except requests.RequestException as exc:
+            raise ValueError(f"Proxy unreachable: {exc}") from exc
 
     def is_valid_link(self, link):
         """
@@ -79,7 +103,7 @@ class Scraper:
         try:
             if not html:
                 # Send a GET request to the URL
-                response = requests.get(url)
+                response = self.session.get(url)
                 if response.status_code != 200:
                     logger.warning(
                         f"Failed to fetch {url} with status code {response.status_code}"
@@ -149,7 +173,13 @@ class Scraper:
 
             os.remove(tmp_path)
 
-            logger.debug(f"Successfully scraped content and metadata from {url}")
+            if not markdown.strip():
+                logger.warning("No content scraped from %s", url)
+                return None, None
+
+            logger.debug(
+                "Successfully scraped content and metadata from %s", url
+            )
             return markdown, metadata
 
         except Exception as e:
@@ -233,7 +263,7 @@ class Scraper:
                 url = link[0]  # Extract the URL from the link tuple
 
                 # Attempt to fetch the page content
-                response = requests.get(url)
+                response = self.session.get(url)
 
                 # Increment request count for rate limiting
                 request_count += 1
