@@ -90,7 +90,7 @@ def main():
     )
     parser.add_argument(
         "--proxy",
-        help="Proxy URL for HTTP requests",
+        help="Proxy URL for HTTP or SOCKS requests",
         default=None,
     )
     parser.add_argument(

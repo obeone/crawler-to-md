@@ -1,4 +1,5 @@
 import sys
+
 from crawler_to_md import cli
 from crawler_to_md.export_manager import ExportManager
 from crawler_to_md.scraper import Scraper
@@ -79,4 +80,40 @@ def test_cli_proxy_option(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, 'argv', args)
     cli.main()
     assert captured.get('proxy') == 'http://proxy:8080'
+
+
+def test_cli_socks_proxy(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_init(
+        self,
+        base_url,
+        exclude_patterns,
+        db_manager,
+        rate_limit=0,
+        delay=0,
+        proxy=None,
+    ):
+        captured['proxy'] = proxy
+
+    monkeypatch.setattr(Scraper, '__init__', fake_init)
+    monkeypatch.setattr(Scraper, 'start_scraping', lambda *a, **k: None)
+    monkeypatch.setattr(ExportManager, 'export_to_markdown', lambda *a, **k: None)
+    monkeypatch.setattr(ExportManager, 'export_to_json', lambda *a, **k: None)
+
+    cache_folder = tmp_path / 'cache'
+    args = [
+        'prog',
+        '--url',
+        'http://example.com',
+        '--output-folder',
+        str(tmp_path),
+        '--cache-folder',
+        str(cache_folder),
+        '--proxy',
+        'socks5://localhost:9050',
+    ]
+    monkeypatch.setattr(sys, 'argv', args)
+    cli.main()
+    assert captured.get('proxy') == 'socks5://localhost:9050'
 

@@ -1,6 +1,5 @@
 from unittest.mock import MagicMock, patch
 
-import requests
 import tqdm
 
 from crawler_to_md.database_manager import DatabaseManager
@@ -180,3 +179,13 @@ def test_scraper_proxy_initialization():
     )
     assert scraper.session.proxies.get('http') == 'http://proxy:8080'
     assert scraper.session.proxies.get('https') == 'http://proxy:8080'
+
+
+def test_scraper_socks_proxy_initialization():
+    db = DummyDB()
+    proxy = 'socks5://localhost:9050'
+    scraper = Scraper(
+        base_url='http://example.com', exclude_patterns=[], db_manager=db, proxy=proxy
+    )
+    assert scraper.session.proxies.get('http') == proxy
+    assert scraper.session.proxies.get('https') == proxy

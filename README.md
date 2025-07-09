@@ -67,7 +67,7 @@ Options:
 - `--export-individual`, `-ei`: Export each page as an individual Markdown file. 📝
 - `--rate-limit`, `-rl`: Maximum number of requests per minute (default: 0, no rate limit). ⏱️
 - `--delay`, `-d`: Delay between requests in seconds (default: 0, no delay). 🕒
-- `--proxy`: Proxy URL for HTTP requests. 🌐
+- `--proxy`: Proxy URL for HTTP or SOCKS requests. 🌐
 
 One of the `--url` or `--urls-file` options is required.
 

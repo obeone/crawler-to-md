@@ -36,7 +36,7 @@ class Scraper:
             db_manager (DatabaseManager): The database manager object.
             rate_limit (int): Maximum number of requests per minute.
             delay (float): Delay between requests in seconds.
-            proxy (str, optional): Proxy URL for HTTP requests.
+            proxy (str, optional): Proxy URL for HTTP or SOCKS requests.
         """
         logger.debug(f"Initializing Scraper with base URL: {base_url}")
         self.base_url = base_url
