@@ -186,7 +186,7 @@ class Scraper:
             logger.error(f"Error scraping {url}: {e}")
             return None, None
 
-    def start_scraping(self, url=None, urls_list=[]):
+    def start_scraping(self, url=None, urls_list=None):
         """
         Initiates the scraping process for a single URL or a list of URLs.
         It validates URLs, logs the scraping process, and manages the
@@ -197,15 +197,18 @@ class Scraper:
             urls_list (list, optional): A list of URLs to scrape.
         """
         # Validate and insert the provided URLs into the database
-        if urls_list:
-            # Iterate through the list to check for valid URLs
-            for url_item in urls_list:
+        urls = urls_list or []
+        if urls:
+            # Build a new list of valid URLs without modifying the original list
+            validated_urls = []
+            for url_item in urls:
                 if not self.is_valid_link(url_item):
                     logger.warning(f"Skipping invalid URL: {url_item}")
-                    urls_list.remove(url_item)  # Remove invalid URLs from the list
+                    continue
+                validated_urls.append(url_item)
 
             # Insert the validated list of URLs into the database
-            self.db_manager.insert_link(urls_list)
+            self.db_manager.insert_link(validated_urls)
         elif url:
             # Insert a single URL if provided and valid
             self.db_manager.insert_link(url)

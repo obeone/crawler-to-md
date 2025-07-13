@@ -218,3 +218,91 @@ def test_scrape_page_returns_none_for_empty_content(monkeypatch):
 
     assert content is None
     assert metadata is None
+
+
+def test_start_scraping_excludes_invalid_urls(monkeypatch):
+    db = ListDB()
+    scraper = Scraper(
+        base_url='http://example.com',
+        exclude_patterns=['/exclude'],
+        db_manager=db,
+    )
+
+    monkeypatch.setattr(Scraper, 'fetch_links', lambda self, url, html=None: set())
+    monkeypatch.setattr(
+        Scraper, 'scrape_page', lambda self, html, url: ('# MD', {'url': url})
+    )
+
+    class DummyResp:
+        status_code = 200
+        headers = {'content-type': 'text/html'}
+        content = b'<html></html>'
+        text = '<html></html>'
+
+    monkeypatch.setattr(scraper.session, 'get', lambda url: DummyResp())
+
+    class DummyTqdm:
+        def __init__(self, *a, **k):
+            self.total = k.get('total', 0)
+        def update(self, n):
+            pass
+        def refresh(self):
+            pass
+        def close(self):
+            pass
+
+    monkeypatch.setattr(tqdm, 'tqdm', lambda *a, **k: DummyTqdm(*a, **k))
+
+    urls = [
+        'http://example.com/page1',
+        'http://example.com/exclude/page',
+        'http://example.com/page2',
+    ]
+
+    scraper.start_scraping(urls_list=urls)
+
+    assert 'http://example.com/exclude/page' not in db.links
+
+
+def test_start_scraping_filters_discovered_links(monkeypatch):
+    db = ListDB()
+    scraper = Scraper(
+        base_url='http://example.com',
+        exclude_patterns=['/exclude'],
+        db_manager=db,
+    )
+
+    html = (
+        '<html><body>'
+        '<a href="/page1">1</a>'
+        '<a href="/exclude/page">2</a>'
+        '<a href="/page2">3</a>'
+        '</body></html>'
+    )
+
+    class DummyResp:
+        status_code = 200
+        headers = {'content-type': 'text/html'}
+        text = html
+
+    monkeypatch.setattr(scraper.session, 'get', lambda url: DummyResp())
+
+    monkeypatch.setattr(
+        Scraper, 'scrape_page', lambda self, html, url: ('# MD', {'url': url})
+    )
+
+    class DummyTqdm:
+        def __init__(self, *a, **k):
+            self.total = k.get('total', 0)
+        def update(self, n):
+            pass
+        def refresh(self):
+            pass
+        def close(self):
+            pass
+
+    monkeypatch.setattr(tqdm, 'tqdm', lambda *a, **k: DummyTqdm(*a, **k))
+
+    scraper.start_scraping(url='http://example.com')
+
+    assert 'http://example.com/exclude/page' not in db.links
