@@ -52,7 +52,7 @@ pip install .
 Start scraping with the following command:
 
 ```shell
-crawler-to-md --url <URL> [--output-folder ./output] [--cache-folder ./cache] [--base-url <BASE_URL>] [--exclude <KEYWORD_IN_URL>] [--title <TITLE>] [--urls-file <URLS_FILE>] [-p <PROXY_URL>]
+crawler-to-md --url <URL> [--output-folder ./output] [--cache-folder ./cache] [--overwrite-cache|-w] [--base-url <BASE_URL>] [--exclude <KEYWORD_IN_URL>] [--title <TITLE>] [--urls-file <URLS_FILE>] [-p <PROXY_URL>]
 ```
 
 Options:
@@ -61,6 +61,7 @@ Options:
 - `--urls-file`: Path to a file containing URLs to scrape, one URL per line. If '-', read from stdin. 📁
 - `--output-folder`, `-o`: Where to save Markdown files (default: `./output`). 📂
 - `--cache-folder`, `-c`: Where to store the database (default: `./cache`). 💾
+- `--overwrite-cache`, `-w`: Overwrite existing cache database before scraping. 🧹
 - `--base-url`, `-b`: Filter links by base URL (default: URL's base). 🔎
 - `--title`, `-t`: Final title of the markdown file. Defaults to the URL. 🏷️
 - `--exclude`, `-e`: Exclude URLs containing this string (repeatable). ❌
