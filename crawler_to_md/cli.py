@@ -178,7 +178,11 @@ def main():
     )
     if args.overwrite_cache and os.path.exists(db_path):
         logger.info(f"Removing existing cache database at {db_path}")
-        os.remove(db_path)
+        try:
+            os.remove(db_path)
+        except OSError as e:
+            logger.error(f"Failed to remove cache database at {db_path}: {e}")
+            sys.exit(1)
     db_manager = DatabaseManager(db_path)
     logger.info("DatabaseManager initialized.")
 
