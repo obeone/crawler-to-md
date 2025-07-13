@@ -51,6 +51,13 @@ def main():
         default="~/.cache/crawler-to-md",
     )
     parser.add_argument(
+        "--overwrite-cache",
+        "-w",
+        action="store_true",
+        help="Overwrite existing cache database if present",
+        default=False,
+    )
+    parser.add_argument(
         "--base-url",
         "-b",
         help="Base URL for filtering links. Defaults to the URL base",
@@ -169,6 +176,13 @@ def main():
     db_path = os.path.join(
         args.cache_folder, utils.url_to_filename(first_url) + ".sqlite"
     )
+    if args.overwrite_cache and os.path.exists(db_path):
+        logger.info(f"Removing existing cache database at {db_path}")
+        try:
+            os.remove(db_path)
+        except OSError as e:
+            logger.error(f"Failed to remove cache database at {db_path}: {e}")
+            sys.exit(1)
     db_manager = DatabaseManager(db_path)
     logger.info("DatabaseManager initialized.")
 

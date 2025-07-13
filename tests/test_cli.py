@@ -1,8 +1,11 @@
+import os
+import sqlite3
 import sys
 
 import pytest
 
-from crawler_to_md import cli
+from crawler_to_md import cli, utils
+from crawler_to_md.database_manager import DatabaseManager
 from crawler_to_md.export_manager import ExportManager
 from crawler_to_md.scraper import Scraper
 
@@ -176,4 +179,70 @@ def test_cli_proxy_error(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, 'argv', args)
     with pytest.raises(SystemExit):
         cli.main()
+
+
+def test_cli_overwrite_cache(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_init(self, db_path):
+        captured['exists'] = os.path.exists(db_path)
+        self.conn = sqlite3.connect(':memory:')
+
+    monkeypatch.setattr(DatabaseManager, '__init__', fake_init)
+    monkeypatch.setattr(ExportManager, 'export_to_markdown', lambda *a, **k: None)
+    monkeypatch.setattr(ExportManager, 'export_to_json', lambda *a, **k: None)
+    monkeypatch.setattr(Scraper, 'start_scraping', lambda *a, **k: None)
+
+    cache_folder = tmp_path / 'cache'
+    db_name = utils.url_to_filename('http://example.com') + '.sqlite'
+    db_path = cache_folder / db_name
+    cache_folder.mkdir()
+    db_path.write_text('dummy')
+
+    args = [
+        'prog',
+        '--url',
+        'http://example.com',
+        '--output-folder',
+        str(tmp_path),
+        '--cache-folder',
+        str(cache_folder),
+        '--overwrite-cache',
+    ]
+    monkeypatch.setattr(sys, 'argv', args)
+    cli.main()
+    assert captured.get('exists') is False
+
+
+def test_cli_overwrite_cache_short_option(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_init(self, db_path):
+        captured['exists'] = os.path.exists(db_path)
+        self.conn = sqlite3.connect(':memory:')
+
+    monkeypatch.setattr(DatabaseManager, '__init__', fake_init)
+    monkeypatch.setattr(ExportManager, 'export_to_markdown', lambda *a, **k: None)
+    monkeypatch.setattr(ExportManager, 'export_to_json', lambda *a, **k: None)
+    monkeypatch.setattr(Scraper, 'start_scraping', lambda *a, **k: None)
+
+    cache_folder = tmp_path / 'cache'
+    db_name = utils.url_to_filename('http://example.com') + '.sqlite'
+    db_path = cache_folder / db_name
+    cache_folder.mkdir()
+    db_path.write_text('dummy')
+
+    args = [
+        'prog',
+        '--url',
+        'http://example.com',
+        '--output-folder',
+        str(tmp_path),
+        '--cache-folder',
+        str(cache_folder),
+        '-w',
+    ]
+    monkeypatch.setattr(sys, 'argv', args)
+    cli.main()
+    assert captured.get('exists') is False
 
