@@ -81,14 +81,20 @@ By default, the `WARN` level is used. You can change it with the `LOG_LEVEL` env
 Run with Docker:
 
 ```shell
-docker run --rm -v $(pwd)/output:/app/output -v cache:/app/cache ghcr.io/obeone/crawler-to-md --url <URL>
+docker run --rm \
+  -v $(pwd)/output:/app/output \
+  -v cache:/home/app/.cache/crawler-to-md \
+  ghcr.io/obeone/crawler-to-md --url <URL>
 ```
 
 Build from source:
 
 ```shell
 docker build -t crawler-to-md .
-docker run --rm -v $(pwd)/output:/app/output crawler-to-md --url <URL>
+
+docker run --rm \
+  -v $(pwd)/output:/app/output \
+  crawler-to-md --url <URL>
 ```
 
 ## 🤝 Contributing
