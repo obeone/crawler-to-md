@@ -68,7 +68,7 @@ def main():
         help="Final title of the markdown file. Defaults to the URL",
     )
     parser.add_argument(
-        "--exclude",
+        "--exclude-url",
         "-e",
         action="append",
         help="Exclude URLs containing this string",
@@ -112,6 +112,26 @@ def main():
         action="store_true",
         help="Disable generation of the compiled JSON file",
         default=False,
+    )
+    parser.add_argument(
+        "--include",
+        "-i",
+        action="append",
+        help=(
+            "CSS-like selector (#id, .class, tag) to include before Markdown "
+            "conversion. Repeatable."
+        ),
+        default=[],
+    )
+    parser.add_argument(
+        "--exclude",
+        "-x",
+        action="append",
+        help=(
+            "CSS-like selector (#id, .class, tag) to exclude before Markdown "
+            "conversion. Repeatable."
+        ),
+        default=[],
     )
 
     try:
@@ -189,11 +209,13 @@ def main():
     try:
         scraper = Scraper(
             base_url=args.base_url,
-            exclude_patterns=args.exclude,
+            exclude_patterns=args.exclude_url,
             db_manager=db_manager,
             rate_limit=args.rate_limit,
             delay=args.delay,
             proxy=args.proxy,
+            include_filters=args.include,
+            exclude_filters=args.exclude,
         )
     except ValueError as exc:
         parser.error(str(exc))

@@ -62,7 +62,15 @@ def test_cli_proxy_option(monkeypatch, tmp_path):
         rate_limit=0,
         delay=0,
         proxy=None,
+        include_filters=None,
+        exclude_filters=None,
     ):
+        """
+        Fake initializer to capture proxy argument.
+
+        Args:
+            proxy (str, optional): Proxy URL.
+        """
         captured['proxy'] = proxy
 
     monkeypatch.setattr(Scraper, '__init__', fake_init)
@@ -98,7 +106,15 @@ def test_cli_proxy_short_option(monkeypatch, tmp_path):
         rate_limit=0,
         delay=0,
         proxy=None,
+        include_filters=None,
+        exclude_filters=None,
     ):
+        """
+        Fake initializer to capture proxy argument.
+
+        Args:
+            proxy (str, optional): Proxy URL.
+        """
         captured['proxy'] = proxy
 
     monkeypatch.setattr(Scraper, '__init__', fake_init)
@@ -134,7 +150,15 @@ def test_cli_socks_proxy(monkeypatch, tmp_path):
         rate_limit=0,
         delay=0,
         proxy=None,
+        include_filters=None,
+        exclude_filters=None,
     ):
+        """
+        Fake initializer to capture proxy argument.
+
+        Args:
+            proxy (str, optional): Proxy URL.
+        """
         captured['proxy'] = proxy
 
     monkeypatch.setattr(Scraper, '__init__', fake_init)
@@ -179,6 +203,118 @@ def test_cli_proxy_error(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, 'argv', args)
     with pytest.raises(SystemExit):
         cli.main()
+
+
+def test_cli_include_exclude_options(monkeypatch, tmp_path):
+    """
+    Ensure CLI passes include and exclude options to the scraper.
+
+    Args:
+        monkeypatch (pytest.MonkeyPatch): Pytest monkeypatch fixture.
+        tmp_path (pathlib.Path): Temporary path for tests.
+    """
+    captured = {}
+
+    def fake_init(
+        self,
+        base_url,
+        exclude_patterns,
+        db_manager,
+        rate_limit=0,
+        delay=0,
+        proxy=None,
+        include_filters=None,
+        exclude_filters=None,
+    ):
+        """
+        Fake initializer to capture include/exclude arguments.
+
+        Args:
+            include_filters (list, optional): Selectors to include.
+            exclude_filters (list, optional): Selectors to exclude.
+        """
+        captured['include_filters'] = include_filters
+        captured['exclude_filters'] = exclude_filters
+
+    monkeypatch.setattr(Scraper, '__init__', fake_init)
+    monkeypatch.setattr(Scraper, 'start_scraping', lambda *a, **k: None)
+    monkeypatch.setattr(ExportManager, 'export_to_markdown', lambda *a, **k: None)
+    monkeypatch.setattr(ExportManager, 'export_to_json', lambda *a, **k: None)
+
+    cache_folder = tmp_path / 'cache'
+    args = [
+        'prog',
+        '--url',
+        'http://example.com',
+        '--output-folder',
+        str(tmp_path),
+        '--cache-folder',
+        str(cache_folder),
+        '--include',
+        'p',
+        '--exclude',
+        '.remove',
+    ]
+    monkeypatch.setattr(sys, 'argv', args)
+    cli.main()
+    assert captured.get('include_filters') == ['p']
+    assert captured.get('exclude_filters') == ['.remove']
+
+
+def test_cli_include_exclude_short_options(monkeypatch, tmp_path):
+    """
+    Ensure short CLI options map to include and exclude selectors.
+
+    Args:
+        monkeypatch (pytest.MonkeyPatch): Pytest monkeypatch fixture.
+        tmp_path (pathlib.Path): Temporary path for tests.
+    """
+    captured = {}
+
+    def fake_init(
+        self,
+        base_url,
+        exclude_patterns,
+        db_manager,
+        rate_limit=0,
+        delay=0,
+        proxy=None,
+        include_filters=None,
+        exclude_filters=None,
+    ):
+        """
+        Capture include and exclude selectors from short options.
+
+        Args:
+            include_filters (list, optional): Selectors to include.
+            exclude_filters (list, optional): Selectors to exclude.
+        """
+        captured['include_filters'] = include_filters
+        captured['exclude_filters'] = exclude_filters
+
+    monkeypatch.setattr(Scraper, '__init__', fake_init)
+    monkeypatch.setattr(Scraper, 'start_scraping', lambda *a, **k: None)
+    monkeypatch.setattr(ExportManager, 'export_to_markdown', lambda *a, **k: None)
+    monkeypatch.setattr(ExportManager, 'export_to_json', lambda *a, **k: None)
+
+    cache_folder = tmp_path / 'cache'
+    args = [
+        'prog',
+        '--url',
+        'http://example.com',
+        '--output-folder',
+        str(tmp_path),
+        '--cache-folder',
+        str(cache_folder),
+        '-i',
+        '#keep',
+        '-x',
+        'span',
+    ]
+    monkeypatch.setattr(sys, 'argv', args)
+    cli.main()
+    assert captured.get('include_filters') == ['#keep']
+    assert captured.get('exclude_filters') == ['span']
 
 
 def test_cli_overwrite_cache(monkeypatch, tmp_path):
