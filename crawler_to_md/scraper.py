@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import tempfile
@@ -184,10 +185,23 @@ class Scraper:
             soup = BeautifulSoup(html, "html.parser")
 
             if self.include_filters:
+                # Create a new soup to hold the included elements
+                new_soup = BeautifulSoup("", "html.parser")
+                # Ensure the new soup has a body tag if it's a full HTML document
+                if soup.find("body"):
+                    body = new_soup.new_tag("body")
+                    new_soup.append(body)
+                else:
+                    body = new_soup
+
                 elements = []
                 for selector in self.include_filters:
                     elements.extend(self._find_elements(soup, selector))
-                soup = BeautifulSoup("".join(str(el) for el in elements), "html.parser")
+
+                # Append a copy of each element to the new soup to maintain structure
+                for el in elements:
+                    body.append(copy.copy(el))
+                soup = new_soup
 
             for selector in self.exclude_filters:
                 for element in self._find_elements(soup, selector):
