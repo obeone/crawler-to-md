@@ -35,6 +35,7 @@ crawler-to-md --url https://www.example.com
 - Exports each page as an individual Markdown file if `--export-individual` is used. 📝
 - Uses SQLite for efficient data management. 📊
 - Configurable via command-line arguments. ⚙️
+- Include or exclude specific HTML elements using CSS-like selectors (#id, .class, tag) during Markdown conversion. 🧩
 - Docker support. 🐳
 
 ## 📋 Requirements
@@ -52,7 +53,7 @@ pip install .
 Start scraping with the following command:
 
 ```shell
-crawler-to-md --url <URL> [--output-folder ./output] [--cache-folder ./cache] [--overwrite-cache|-w] [--base-url <BASE_URL>] [--exclude <KEYWORD_IN_URL>] [--title <TITLE>] [--urls-file <URLS_FILE>] [-p <PROXY_URL>]
+crawler-to-md --url <URL> [--output-folder ./output] [--cache-folder ./cache] [--overwrite-cache|-w] [--base-url <BASE_URL>] [--exclude-url <KEYWORD_IN_URL>] [--title <TITLE>] [--urls-file <URLS_FILE>] [-p <PROXY_URL>]
 ```
 
 Options:
@@ -64,11 +65,13 @@ Options:
 - `--overwrite-cache`, `-w`: Overwrite existing cache database before scraping. 🧹
 - `--base-url`, `-b`: Filter links by base URL (default: URL's base). 🔎
 - `--title`, `-t`: Final title of the markdown file. Defaults to the URL. 🏷️
-- `--exclude`, `-e`: Exclude URLs containing this string (repeatable). ❌
+- `--exclude-url`, `-e`: Exclude URLs containing this string (repeatable). ❌
 - `--export-individual`, `-ei`: Export each page as an individual Markdown file. 📝
 - `--rate-limit`, `-rl`: Maximum number of requests per minute (default: 0, no rate limit). ⏱️
 - `--delay`, `-d`: Delay between requests in seconds (default: 0, no delay). 🕒
 - `--proxy`, `-p`: Proxy URL for HTTP or SOCKS requests. 🌐
+- `--include`, `-i`: CSS-like selector (#id, .class, tag) to include before Markdown conversion (repeatable). ✅
+- `--exclude`, `-x`: CSS-like selector (#id, .class, tag) to exclude before Markdown conversion (repeatable). 🚫
 
 One of the `--url` or `--urls-file` options is required.
 

@@ -103,6 +103,47 @@ def test_scrape_page_with_markitdown(mock_tempfile, mock_os_remove):
     assert metadata.get('title') == 'Test'
 
 
+@patch('os.remove')
+@patch('tempfile.NamedTemporaryFile')
+def test_scrape_page_include_exclude(mock_tempfile, mock_os_remove):
+    """
+    Verify include and exclude selectors filter HTML before conversion.
+
+    Args:
+        mock_tempfile (MagicMock): Mock for NamedTemporaryFile.
+        mock_os_remove (MagicMock): Mock for os.remove.
+    """
+    mock_file = MagicMock()
+    mock_file.name = "dummy_path"
+    mock_tempfile.return_value.__enter__.return_value = mock_file
+
+    db = DummyDB()
+    scraper = Scraper(
+        base_url='http://example.com',
+        exclude_patterns=[],
+        db_manager=db,
+        include_filters=['p'],
+        exclude_filters=['.remove'],
+    )
+    html = (
+        '<html><body><p class="keep">Keep</p>'
+        '<p class="remove">Remove</p><span>Ignore</span></body></html>'
+    )
+
+    with patch('crawler_to_md.scraper.MarkItDown') as mock_markdown:
+        def convert_side_effect(path):
+            """Return the HTML written to the temporary file."""
+            return mock_file.write.call_args[0][0]
+
+        mock_markdown.return_value.convert.side_effect = convert_side_effect
+        content, metadata = scraper.scrape_page(html, 'http://example.com/test')
+
+    assert 'Keep' in content
+    assert 'Remove' not in content
+    assert 'Ignore' not in content
+    assert metadata.get('title') == ''
+
+
 
 class ListDB(DummyDB):
     def __init__(self):

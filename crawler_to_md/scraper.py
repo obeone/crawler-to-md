@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import tempfile
@@ -25,18 +26,23 @@ class Scraper:
         rate_limit=0,
         delay=0,
         proxy=None,
+        include_filters=None,
+        exclude_filters=None,
     ):
         """
-        Initialize the Scraper object.
-        Log the initialization process.
+        Initialize the Scraper object and log the initialization process.
 
         Args:
             base_url (str): The base URL to start scraping from.
-            exclude_patterns (list): List of patterns to exclude from scraping.
+            exclude_patterns (list): List of URL patterns to exclude from scraping.
             db_manager (DatabaseManager): The database manager object.
             rate_limit (int): Maximum number of requests per minute.
             delay (float): Delay between requests in seconds.
             proxy (str, optional): Proxy URL for HTTP or SOCKS requests.
+            include_filters (list, optional): CSS-like selectors (#id, .class, tag)
+                of elements to include before Markdown conversion.
+            exclude_filters (list, optional): CSS-like selectors (#id, .class, tag)
+                of elements to exclude before Markdown conversion.
 
         Raises:
             ValueError: If a proxy is provided but unreachable.
@@ -52,6 +58,9 @@ class Scraper:
             self.session.proxies.update({"http": proxy, "https": proxy})
         self.proxy = proxy
 
+        self.include_filters = include_filters or []
+        self.exclude_filters = exclude_filters or []
+
         if proxy:
             self._test_proxy()
 
@@ -66,6 +75,24 @@ class Scraper:
             self.session.head(self.base_url, timeout=5)
         except requests.RequestException as exc:
             raise ValueError(f"Proxy unreachable: {exc}") from exc
+
+    def _find_elements(self, soup: BeautifulSoup, selector: str):
+        """
+        Locate elements in the soup using a CSS-like selector.
+
+        Args:
+            soup (BeautifulSoup): Parsed HTML document.
+            selector (str): Selector in the form of '#id', '.class', or tag name.
+
+        Returns:
+            list[Tag]: List of matching elements.
+        """
+        if selector.startswith("#"):
+            element = soup.find(id=selector[1:])
+            return [element] if element else []
+        if selector.startswith("."):
+            return soup.find_all(class_=selector[1:])
+        return soup.find_all(selector)
 
     def is_valid_link(self, link):
         """
@@ -157,16 +184,40 @@ class Scraper:
             # Parse the content using BeautifulSoup
             soup = BeautifulSoup(html, "html.parser")
 
+            if self.include_filters:
+                # Create a new soup to hold the included elements
+                new_soup = BeautifulSoup("", "html.parser")
+                # Ensure the new soup has a body tag if it's a full HTML document
+                if soup.find("body"):
+                    body = new_soup.new_tag("body")
+                    new_soup.append(body)
+                else:
+                    body = new_soup
+
+                elements = []
+                for selector in self.include_filters:
+                    elements.extend(self._find_elements(soup, selector))
+
+                # Append a copy of each element to the new soup to maintain structure
+                for el in elements:
+                    body.append(copy.copy(el))
+                soup = new_soup
+
+            for selector in self.exclude_filters:
+                for element in self._find_elements(soup, selector):
+                    element.decompose()
+
             # Extract title from the page
             title = soup.title.string if soup.title else ""
 
             metadata = {"title": title}
 
+            filtered_html = str(soup)
             # Convert the HTML to Markdown
             with tempfile.NamedTemporaryFile(
                 mode="w+", delete=False, suffix=".html"
             ) as tmp:
-                tmp.write(html)
+                tmp.write(filtered_html)
                 tmp_path = tmp.name
 
             markdown = str(MarkItDown().convert(tmp_path))
