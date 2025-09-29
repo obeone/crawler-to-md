@@ -31,7 +31,7 @@ dependencies = [
     "tqdm==4.67.1",
     "markitdown==0.1.2",
     "coloredlogs==15.0.1",
-    "beautifulsoup4==4.13.4",
+    "beautifulsoup4==4.14.2",
     "argcomplete==3.6.2",
 ]
 
