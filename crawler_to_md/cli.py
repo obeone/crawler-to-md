@@ -75,6 +75,13 @@ def main():
         default=[],
     )
     parser.add_argument(
+        "--include-url",
+        "-I",
+        action="append",
+        help="Include only URLs containing this string",
+        default=[],
+    )
+    parser.add_argument(
         "--export-individual",
         "-ei",
         action="store_true",
@@ -210,6 +217,7 @@ def main():
         scraper = Scraper(
             base_url=args.base_url,
             exclude_patterns=args.exclude_url,
+            include_url_patterns=args.include_url,
             db_manager=db_manager,
             rate_limit=args.rate_limit,
             delay=args.delay,

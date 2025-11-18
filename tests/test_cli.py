@@ -58,6 +58,7 @@ def test_cli_proxy_option(monkeypatch, tmp_path):
         self,
         base_url,
         exclude_patterns,
+        include_url_patterns,
         db_manager,
         rate_limit=0,
         delay=0,
@@ -102,6 +103,7 @@ def test_cli_proxy_short_option(monkeypatch, tmp_path):
         self,
         base_url,
         exclude_patterns,
+        include_url_patterns,
         db_manager,
         rate_limit=0,
         delay=0,
@@ -146,6 +148,7 @@ def test_cli_socks_proxy(monkeypatch, tmp_path):
         self,
         base_url,
         exclude_patterns,
+        include_url_patterns,
         db_manager,
         rate_limit=0,
         delay=0,
@@ -219,6 +222,7 @@ def test_cli_include_exclude_options(monkeypatch, tmp_path):
         self,
         base_url,
         exclude_patterns,
+        include_url_patterns,
         db_manager,
         rate_limit=0,
         delay=0,
@@ -275,6 +279,7 @@ def test_cli_include_exclude_short_options(monkeypatch, tmp_path):
         self,
         base_url,
         exclude_patterns,
+        include_url_patterns,
         db_manager,
         rate_limit=0,
         delay=0,
@@ -315,6 +320,58 @@ def test_cli_include_exclude_short_options(monkeypatch, tmp_path):
     cli.main()
     assert captured.get('include_filters') == ['#keep']
     assert captured.get('exclude_filters') == ['span']
+
+
+def test_cli_include_url_option(monkeypatch, tmp_path):
+    """
+    Ensure CLI passes include URL filters to the scraper.
+
+    Args:
+        monkeypatch (pytest.MonkeyPatch): Pytest monkeypatch fixture.
+        tmp_path (pathlib.Path): Temporary path for tests.
+    """
+    captured = {}
+
+    def fake_init(
+        self,
+        base_url,
+        exclude_patterns,
+        include_url_patterns,
+        db_manager,
+        rate_limit=0,
+        delay=0,
+        proxy=None,
+        include_filters=None,
+        exclude_filters=None,
+    ):
+        """
+        Capture include URL patterns argument.
+
+        Args:
+            include_url_patterns (list): URL substrings to include.
+        """
+        captured['include_url_patterns'] = include_url_patterns
+
+    monkeypatch.setattr(Scraper, '__init__', fake_init)
+    monkeypatch.setattr(Scraper, 'start_scraping', lambda *a, **k: None)
+    monkeypatch.setattr(ExportManager, 'export_to_markdown', lambda *a, **k: None)
+    monkeypatch.setattr(ExportManager, 'export_to_json', lambda *a, **k: None)
+
+    cache_folder = tmp_path / 'cache'
+    args = [
+        'prog',
+        '--url',
+        'http://example.com',
+        '--output-folder',
+        str(tmp_path),
+        '--cache-folder',
+        str(cache_folder),
+        '--include-url',
+        '/blog',
+    ]
+    monkeypatch.setattr(sys, 'argv', args)
+    cli.main()
+    assert captured.get('include_url_patterns') == ['/blog']
 
 
 def test_cli_overwrite_cache(monkeypatch, tmp_path):

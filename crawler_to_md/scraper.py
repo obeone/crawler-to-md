@@ -22,6 +22,7 @@ class Scraper:
         self,
         base_url,
         exclude_patterns,
+        include_url_patterns,
         db_manager: DatabaseManager,
         rate_limit=0,
         delay=0,
@@ -35,6 +36,7 @@ class Scraper:
         Args:
             base_url (str): The base URL to start scraping from.
             exclude_patterns (list): List of URL patterns to exclude from scraping.
+            include_url_patterns (list): List of URL patterns that must be present to scrape.
             db_manager (DatabaseManager): The database manager object.
             rate_limit (int): Maximum number of requests per minute.
             delay (float): Delay between requests in seconds.
@@ -50,6 +52,7 @@ class Scraper:
         logger.debug(f"Initializing Scraper with base URL: {base_url}")
         self.base_url = base_url
         self.exclude_patterns = exclude_patterns or []
+        self.include_url_patterns = include_url_patterns or []
         self.db_manager = db_manager
         self.rate_limit = rate_limit
         self.delay = delay
@@ -107,6 +110,10 @@ class Scraper:
         """
         valid = True
         if self.base_url and not link.startswith(self.base_url):
+            valid = False
+        if self.include_url_patterns and not any(
+            pattern in link for pattern in self.include_url_patterns
+        ):
             valid = False
         for pattern in self.exclude_patterns:
             if pattern in link:

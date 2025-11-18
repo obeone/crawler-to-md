@@ -28,17 +28,32 @@ class DummyDB(DatabaseManager):
 def test_is_valid_link():
     db = DummyDB()
     scraper = Scraper(
-        base_url='https://example.com', exclude_patterns=['/exclude'], db_manager=db
+        base_url='https://example.com',
+        exclude_patterns=['/exclude'],
+        include_url_patterns=[],
+        db_manager=db,
     )
     assert scraper.is_valid_link('https://example.com/page')
     assert not scraper.is_valid_link('https://example.com/exclude/page')
     assert not scraper.is_valid_link('https://other.com/')
 
+    include_scraper = Scraper(
+        base_url='https://example.com',
+        exclude_patterns=[],
+        include_url_patterns=['/docs'],
+        db_manager=db,
+    )
+    assert include_scraper.is_valid_link('https://example.com/docs/page')
+    assert not include_scraper.is_valid_link('https://example.com/blog')
+
 
 def test_fetch_links():
     db = DummyDB()
     scraper = Scraper(
-        base_url='https://example.com', exclude_patterns=['/exclude'], db_manager=db
+        base_url='https://example.com',
+        exclude_patterns=['/exclude'],
+        include_url_patterns=[],
+        db_manager=db,
     )
     html = '''<html><body>
     <a href="https://example.com/page1">1</a>
@@ -47,6 +62,23 @@ def test_fetch_links():
     </body></html>'''
     links = scraper.fetch_links(url='https://example.com', html=html)
     assert links == {'https://example.com/page1', 'https://example.com/page2'}
+
+
+def test_fetch_links_includes_only_matching_patterns():
+    db = DummyDB()
+    scraper = Scraper(
+        base_url='https://example.com',
+        exclude_patterns=[],
+        include_url_patterns=['/page1'],
+        db_manager=db,
+    )
+    html = '''<html><body>
+    <a href="https://example.com/page1">1</a>
+    <a href="/page2">2</a>
+    <a href="https://example.com/page3">3</a>
+    </body></html>'''
+    links = scraper.fetch_links(url='https://example.com', html=html)
+    assert links == {'https://example.com/page1'}
 
 
 
@@ -60,7 +92,12 @@ def test_scrape_page_parses_content_and_metadata(mock_tempfile, mock_os_remove):
     mock_tempfile.return_value.__enter__.return_value = mock_file
 
     db = DummyDB()
-    scraper = Scraper(base_url='http://example.com', exclude_patterns=[], db_manager=db)
+    scraper = Scraper(
+        base_url='http://example.com',
+        exclude_patterns=[],
+        include_url_patterns=[],
+        db_manager=db,
+    )
     html = '<html><head><title>Test</title></head><body><p>Hello</p></body></html>'
 
     # Act
@@ -83,7 +120,12 @@ def test_scrape_page_with_markitdown(mock_tempfile, mock_os_remove):
     mock_tempfile.return_value.__enter__.return_value = mock_file
 
     db = DummyDB()
-    scraper = Scraper(base_url='http://example.com', exclude_patterns=[], db_manager=db)
+    scraper = Scraper(
+        base_url='http://example.com',
+        exclude_patterns=[],
+        include_url_patterns=[],
+        db_manager=db,
+    )
     html = (
         '<html><head><title>Test</title></head><body><h1>A Title</h1>'
         '<p>This is a paragraph with <strong>bold</strong> text.</p></body></html>'
@@ -121,6 +163,7 @@ def test_scrape_page_include_exclude(mock_tempfile, mock_os_remove):
     scraper = Scraper(
         base_url='http://example.com',
         exclude_patterns=[],
+        include_url_patterns=[],
         db_manager=db,
         include_filters=['p'],
         exclude_filters=['.remove'],
@@ -181,7 +224,12 @@ class ListDB(DummyDB):
 
 def test_start_scraping_process(monkeypatch):
     db = ListDB()
-    scraper = Scraper(base_url='http://example.com', exclude_patterns=[], db_manager=db)
+    scraper = Scraper(
+        base_url='http://example.com',
+        exclude_patterns=[],
+        include_url_patterns=[],
+        db_manager=db,
+    )
 
     monkeypatch.setattr(Scraper, 'fetch_links', lambda self, url, html=None: set())
     monkeypatch.setattr(
@@ -219,7 +267,11 @@ def test_scraper_proxy_initialization(monkeypatch):
     db = DummyDB()
     monkeypatch.setattr(Scraper, '_test_proxy', lambda self: None)
     scraper = Scraper(
-        base_url='http://example.com', exclude_patterns=[], db_manager=db, proxy='http://proxy:8080'
+        base_url='http://example.com',
+        exclude_patterns=[],
+        include_url_patterns=[],
+        db_manager=db,
+        proxy='http://proxy:8080'
     )
     assert scraper.session.proxies.get('http') == 'http://proxy:8080'
     assert scraper.session.proxies.get('https') == 'http://proxy:8080'
@@ -230,7 +282,11 @@ def test_scraper_socks_proxy_initialization(monkeypatch):
     proxy = 'socks5://localhost:9050'
     monkeypatch.setattr(Scraper, '_test_proxy', lambda self: None)
     scraper = Scraper(
-        base_url='http://example.com', exclude_patterns=[], db_manager=db, proxy=proxy
+        base_url='http://example.com',
+        exclude_patterns=[],
+        include_url_patterns=[],
+        db_manager=db,
+        proxy=proxy
     )
     assert scraper.session.proxies.get('http') == proxy
     assert scraper.session.proxies.get('https') == proxy
@@ -244,13 +300,22 @@ def test_scraper_proxy_failure_detection(monkeypatch):
     monkeypatch.setattr(requests.Session, 'head', fake_head)
     with pytest.raises(ValueError):
         Scraper(
-            base_url='http://example.com', exclude_patterns=[], db_manager=db, proxy='http://proxy:8080'
+            base_url='http://example.com',
+            exclude_patterns=[],
+            include_url_patterns=[],
+            db_manager=db,
+            proxy='http://proxy:8080'
         )
 
 
 def test_scrape_page_returns_none_for_empty_content(monkeypatch):
     db = DummyDB()
-    scraper = Scraper(base_url='http://example.com', exclude_patterns=[], db_manager=db)
+    scraper = Scraper(
+        base_url='http://example.com',
+        exclude_patterns=[],
+        include_url_patterns=[],
+        db_manager=db,
+    )
     html = '<html><body></body></html>'
 
     with patch('crawler_to_md.scraper.MarkItDown') as mock_markdown:
@@ -266,6 +331,7 @@ def test_start_scraping_excludes_invalid_urls(monkeypatch):
     scraper = Scraper(
         base_url='http://example.com',
         exclude_patterns=['/exclude'],
+        include_url_patterns=[],
         db_manager=db,
     )
 
@@ -310,6 +376,7 @@ def test_start_scraping_filters_discovered_links(monkeypatch):
     scraper = Scraper(
         base_url='http://example.com',
         exclude_patterns=['/exclude'],
+        include_url_patterns=[],
         db_manager=db,
     )
 
