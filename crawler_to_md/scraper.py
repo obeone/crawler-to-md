@@ -282,11 +282,17 @@ class Scraper:
             initial=self.db_manager.get_visited_links_count(),
             desc="Scraping",
             unit="link",
+            position=0,
+        )
+        status_line = tqdm(
+            bar_format="{desc}",
+            position=1,
         )
 
         # Initialize rate limit tracking variables
         request_count = 0
         start_time = time.time()
+        stats = {"ok": 0, "err": 0, "skip": 0}
 
         # Begin the scraping loop
         while True:
@@ -322,13 +328,16 @@ class Scraper:
                     )
                     time.sleep(self.delay)
 
-                pbar.update(1)  # Update the progress bar
                 url = link[0]  # Extract the URL from the link tuple
+                status_line.set_description_str(f"  \u2937 {url}")
 
                 # Attempt to fetch the page content
                 try:
                     response = self.session.get(url, timeout=self.timeout)
                 except requests.RequestException as e:
+                    stats["err"] += 1
+                    pbar.set_postfix(stats, refresh=False)
+                    pbar.update(1)
                     logger.error(f"Error fetching {url}: {e}")
                     self.db_manager.mark_link_visited(url)
                     continue
@@ -341,6 +350,9 @@ class Scraper:
                     "content-type", ""
                 ).startswith("text/html"):
                     # Mark the link as visited and log the reason for skipping
+                    stats["skip"] += 1
+                    pbar.set_postfix(stats, refresh=False)
+                    pbar.update(1)
                     self.db_manager.mark_link_visited(url)
                     logger.info(
                         "Skipping link %s due to invalid status code or content type",
@@ -357,6 +369,9 @@ class Scraper:
                 # Insert the scraped data into the database
                 self.db_manager.insert_page(url, content, json.dumps(metadata))
                 self.db_manager.mark_link_scraped(url)
+                stats["ok"] += 1
+                pbar.set_postfix(stats, refresh=False)
+                pbar.update(1)
 
                 # Fetch and insert new links found on the page,
                 # if not working from a predefined list
@@ -380,5 +395,6 @@ class Scraper:
                 # Mark the current link as visited in the database
                 self.db_manager.mark_link_visited(url)
 
-        # Close the progress bar upon completion of the scraping process
+        # Close the progress bars upon completion of the scraping process
+        status_line.close()
         pbar.close()

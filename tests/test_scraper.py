@@ -260,6 +260,12 @@ def test_start_scraping_process(monkeypatch):
             pass
         def close(self):
             pass
+        def set_postfix(self, *a, **k):
+            pass
+        def set_postfix_str(self, *a, **k):
+            pass
+        def set_description_str(self, *a, **k):
+            pass
 
     monkeypatch.setattr(tqdm, 'tqdm', lambda *a, **k: DummyTqdm(*a, **k))
 
@@ -364,6 +370,12 @@ def test_start_scraping_excludes_invalid_urls(monkeypatch):
             pass
         def close(self):
             pass
+        def set_postfix(self, *a, **k):
+            pass
+        def set_postfix_str(self, *a, **k):
+            pass
+        def set_description_str(self, *a, **k):
+            pass
 
     monkeypatch.setattr(tqdm, 'tqdm', lambda *a, **k: DummyTqdm(*a, **k))
 
@@ -414,6 +426,12 @@ def test_start_scraping_filters_discovered_links(monkeypatch):
         def refresh(self):
             pass
         def close(self):
+            pass
+        def set_postfix(self, *a, **k):
+            pass
+        def set_postfix_str(self, *a, **k):
+            pass
+        def set_description_str(self, *a, **k):
             pass
 
     monkeypatch.setattr(tqdm, 'tqdm', lambda *a, **k: DummyTqdm(*a, **k))
