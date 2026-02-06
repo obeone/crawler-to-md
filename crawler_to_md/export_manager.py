@@ -151,6 +151,8 @@ class ExportManager:
         os.makedirs(output_folder, exist_ok=True)
         for page in pages:
             url, content, metadata = page
+            if content is None:
+                continue  # Skip empty pages
             logger.debug(f"Exporting individual Markdown for URL: {url}")
 
             # Remove base_url from parsed URL if provided
