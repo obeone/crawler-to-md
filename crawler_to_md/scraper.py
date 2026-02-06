@@ -29,6 +29,7 @@ class Scraper:
         proxy=None,
         include_filters=None,
         exclude_filters=None,
+        timeout=None,
     ):
         """
         Initialize the Scraper object and log the initialization process.
@@ -63,6 +64,7 @@ class Scraper:
 
         self.include_filters = include_filters or []
         self.exclude_filters = exclude_filters or []
+        self.timeout = timeout
 
         if proxy:
             self._test_proxy()
@@ -137,7 +139,7 @@ class Scraper:
         try:
             if not html:
                 # Send a GET request to the URL
-                response = self.session.get(url)
+                response = self.session.get(url, timeout=self.timeout)
                 if response.status_code != 200:
                     logger.warning(
                         f"Failed to fetch {url} with status code {response.status_code}"
@@ -324,7 +326,7 @@ class Scraper:
                 url = link[0]  # Extract the URL from the link tuple
 
                 # Attempt to fetch the page content
-                response = self.session.get(url)
+                response = self.session.get(url, timeout=self.timeout)
 
                 # Increment request count for rate limiting
                 request_count += 1

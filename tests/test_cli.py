@@ -65,6 +65,7 @@ def test_cli_proxy_option(monkeypatch, tmp_path):
         proxy=None,
         include_filters=None,
         exclude_filters=None,
+        timeout=None,
     ):
         """
         Fake initializer to capture proxy argument.
@@ -110,6 +111,7 @@ def test_cli_proxy_short_option(monkeypatch, tmp_path):
         proxy=None,
         include_filters=None,
         exclude_filters=None,
+        timeout=None,
     ):
         """
         Fake initializer to capture proxy argument.
@@ -155,6 +157,7 @@ def test_cli_socks_proxy(monkeypatch, tmp_path):
         proxy=None,
         include_filters=None,
         exclude_filters=None,
+        timeout=None,
     ):
         """
         Fake initializer to capture proxy argument.
@@ -229,6 +232,7 @@ def test_cli_include_exclude_options(monkeypatch, tmp_path):
         proxy=None,
         include_filters=None,
         exclude_filters=None,
+        timeout=None,
     ):
         """
         Fake initializer to capture include/exclude arguments.
@@ -286,6 +290,7 @@ def test_cli_include_exclude_short_options(monkeypatch, tmp_path):
         proxy=None,
         include_filters=None,
         exclude_filters=None,
+        timeout=None,
     ):
         """
         Capture include and exclude selectors from short options.
@@ -343,6 +348,7 @@ def test_cli_include_url_option(monkeypatch, tmp_path):
         proxy=None,
         include_filters=None,
         exclude_filters=None,
+        timeout=None,
     ):
         """
         Capture include URL patterns argument.
