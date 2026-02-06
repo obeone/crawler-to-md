@@ -326,7 +326,12 @@ class Scraper:
                 url = link[0]  # Extract the URL from the link tuple
 
                 # Attempt to fetch the page content
-                response = self.session.get(url, timeout=self.timeout)
+                try:
+                    response = self.session.get(url, timeout=self.timeout)
+                except requests.RequestException as e:
+                    logger.error(f"Error fetching {url}: {e}")
+                    self.db_manager.mark_link_visited(url)
+                    continue
 
                 # Increment request count for rate limiting
                 request_count += 1
@@ -351,6 +356,7 @@ class Scraper:
 
                 # Insert the scraped data into the database
                 self.db_manager.insert_page(url, content, json.dumps(metadata))
+                self.db_manager.mark_link_scraped(url)
 
                 # Fetch and insert new links found on the page,
                 # if not working from a predefined list
