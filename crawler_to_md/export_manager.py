@@ -1,11 +1,10 @@
 import json
+import logging
 import os
 
-from . import log_setup
 from .database_manager import DatabaseManager
 
-logger = log_setup.get_logger()
-logger.name = "export_manager"
+logger = logging.getLogger(__name__)
 
 
 class ExportManager:
@@ -93,9 +92,9 @@ class ExportManager:
                 "\n" + metadata_content + "\n\n" + adjusted_content + "\n---"
             )  # Add a separator and metadata
 
-            final_content = self._cleanup_markdown(final_content)
-
-        return final_content
+        # Run cleanup once after the loop instead of on every iteration to avoid
+        # O(n^2) reprocessing of the accumulated content.
+        return self._cleanup_markdown(final_content)
 
     def export_to_markdown(self, output_path):
         """
