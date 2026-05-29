@@ -251,6 +251,26 @@ class DatabaseManager:
             cursor = self.conn.execute("SELECT url, content, metadata FROM pages")
             return cursor.fetchall()
 
+    def get_all_pages_full(self):
+        """
+        Retrieve all pages with their refresh metadata.
+
+        Unlike :meth:`get_all_pages`, this returns the extra columns added in
+        Wave 1 so callers that need provenance (e.g. YAML frontmatter) can
+        access ``fetched_at`` without a per-URL lookup. It is additive: the
+        legacy three-column accessor is preserved for existing callers.
+
+        Returns:
+            list[tuple]: List of ``(url, content, metadata, content_hash,
+            fetched_at)`` tuples for every stored page.
+        """
+        with self.conn:
+            logger.debug("Retrieving all pages with refresh metadata")
+            cursor = self.conn.execute(
+                "SELECT url, content, metadata, content_hash, fetched_at FROM pages"
+            )
+            return cursor.fetchall()
+
     def get_page(self, url):
         """
         Retrieve a single page row by URL.
