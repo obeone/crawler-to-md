@@ -43,6 +43,8 @@ local_scheme   = "no-local-version"
 # Optional dependencies for additional features or development
 [project.optional-dependencies]
 dev = ["pytest", "ruff", "pytest-cov"]
+readability = ["trafilatura"]
+render = ["playwright"]
 
 # Entry points for command-line interface scripts
 [project.scripts]
