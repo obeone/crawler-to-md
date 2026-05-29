@@ -45,6 +45,8 @@ local_scheme   = "no-local-version"
 dev = ["pytest", "ruff", "pytest-cov"]
 readability = ["trafilatura"]
 render = ["playwright"]
+rag = ["tiktoken"]
+vector = ["pyarrow"]
 
 # Entry points for command-line interface scripts
 [project.scripts]
