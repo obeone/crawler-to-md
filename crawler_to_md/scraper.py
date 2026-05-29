@@ -1,5 +1,6 @@
 import copy
 import json
+import logging
 import os
 import tempfile
 import time
@@ -10,11 +11,9 @@ from bs4 import BeautifulSoup, Tag
 from markitdown import MarkItDown
 from tqdm import tqdm
 
-from . import log_setup
 from .database_manager import DatabaseManager
 
-logger = log_setup.get_logger()
-logger.name = "Scraper"
+logger = logging.getLogger(__name__)
 
 
 class Scraper:
@@ -29,6 +28,7 @@ class Scraper:
         proxy=None,
         include_filters=None,
         exclude_filters=None,
+        timeout=15,
     ):
         """
         Initialize the Scraper object and log the initialization process.
@@ -36,7 +36,8 @@ class Scraper:
         Args:
             base_url (str): The base URL to start scraping from.
             exclude_patterns (list): List of URL patterns to exclude from scraping.
-            include_url_patterns (list): List of URL patterns that must be present to scrape.
+            include_url_patterns (list): List of URL patterns that must be
+                present for a link to be scraped.
             db_manager (DatabaseManager): The database manager object.
             rate_limit (int): Maximum number of requests per minute.
             delay (float): Delay between requests in seconds.
@@ -45,6 +46,8 @@ class Scraper:
                 of elements to include before Markdown conversion.
             exclude_filters (list, optional): CSS-like selectors (#id, .class, tag)
                 of elements to exclude before Markdown conversion.
+            timeout (float, optional): Timeout in seconds applied to every HTTP
+                request issued by the scraper. Defaults to ``15``.
 
         Raises:
             ValueError: If a proxy is provided but unreachable.
@@ -56,6 +59,7 @@ class Scraper:
         self.db_manager = db_manager
         self.rate_limit = rate_limit
         self.delay = delay
+        self.timeout = timeout
         self.session = requests.Session()
         if proxy:
             self.session.proxies.update({"http": proxy, "https": proxy})
@@ -75,7 +79,7 @@ class Scraper:
             ValueError: If the proxy cannot fetch the base URL.
         """
         try:
-            self.session.head(self.base_url, timeout=5)
+            self.session.head(self.base_url, timeout=self.timeout)
         except requests.RequestException as exc:
             raise ValueError(f"Proxy unreachable: {exc}") from exc
 
@@ -137,7 +141,7 @@ class Scraper:
         try:
             if not html:
                 # Send a GET request to the URL
-                response = self.session.get(url)
+                response = self.session.get(url, timeout=self.timeout)
                 if response.status_code != 200:
                     logger.warning(
                         f"Failed to fetch {url} with status code {response.status_code}"
@@ -323,8 +327,15 @@ class Scraper:
                 pbar.update(1)  # Update the progress bar
                 url = link[0]  # Extract the URL from the link tuple
 
-                # Attempt to fetch the page content
-                response = self.session.get(url)
+                # Attempt to fetch the page content. Network failures must not
+                # crash the crawl loop: log, mark the link visited so it is not
+                # retried indefinitely, and move on to the next link.
+                try:
+                    response = self.session.get(url, timeout=self.timeout)
+                except requests.RequestException as exc:
+                    logger.warning("Failed to fetch %s: %s", url, exc)
+                    self.db_manager.mark_link_visited(url)
+                    continue
 
                 # Increment request count for rate limiting
                 request_count += 1

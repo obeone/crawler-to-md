@@ -242,7 +242,7 @@ def test_start_scraping_process(monkeypatch):
         content = b'<html></html>'
         text = '<html></html>'
 
-    monkeypatch.setattr(scraper.session, 'get', lambda url: DummyResp())
+    monkeypatch.setattr(scraper.session, 'get', lambda url, **kwargs: DummyResp())
 
     class DummyTqdm:
         def __init__(self, *a, **k):
@@ -346,7 +346,7 @@ def test_start_scraping_excludes_invalid_urls(monkeypatch):
         content = b'<html></html>'
         text = '<html></html>'
 
-    monkeypatch.setattr(scraper.session, 'get', lambda url: DummyResp())
+    monkeypatch.setattr(scraper.session, 'get', lambda url, **kwargs: DummyResp())
 
     class DummyTqdm:
         def __init__(self, *a, **k):
@@ -393,7 +393,7 @@ def test_start_scraping_filters_discovered_links(monkeypatch):
         headers = {'content-type': 'text/html'}
         text = html
 
-    monkeypatch.setattr(scraper.session, 'get', lambda url: DummyResp())
+    monkeypatch.setattr(scraper.session, 'get', lambda url, **kwargs: DummyResp())
 
     monkeypatch.setattr(
         Scraper, 'scrape_page', lambda self, html, url: ('# MD', {'url': url})
@@ -414,3 +414,56 @@ def test_start_scraping_filters_discovered_links(monkeypatch):
     scraper.start_scraping(url='http://example.com')
 
     assert 'http://example.com/exclude/page' not in db.links
+
+
+def test_start_scraping_survives_request_exception(monkeypatch):
+    """
+    The crawl loop must not crash when ``session.get`` raises a network error.
+
+    A :class:`requests.RequestException` injected on the main fetch should be
+    caught: the offending link is marked as visited, no page is stored, and the
+    loop terminates cleanly instead of propagating the exception.
+
+    Args:
+        monkeypatch (pytest.MonkeyPatch): Fixture used to patch network and
+            progress-bar dependencies.
+    """
+    db = ListDB()
+    scraper = Scraper(
+        base_url='http://example.com',
+        exclude_patterns=[],
+        include_url_patterns=[],
+        db_manager=db,
+    )
+
+    def boom(url, **kwargs):
+        raise requests.exceptions.ConnectionError("connection refused")
+
+    monkeypatch.setattr(scraper.session, 'get', boom)
+    monkeypatch.setattr(
+        Scraper, 'scrape_page', lambda self, html, url: ('# MD', {'url': url})
+    )
+
+    class DummyTqdm:
+        def __init__(self, *a, **k):
+            self.total = k.get('total', 0)
+
+        def update(self, n):
+            pass
+
+        def refresh(self):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(tqdm, 'tqdm', lambda *a, **k: DummyTqdm(*a, **k))
+
+    # Should not raise despite the injected network failure.
+    scraper.start_scraping(url='http://example.com/page')
+
+    # The failing link is marked visited so the loop terminates, and no page
+    # was scraped.
+    assert ('http://example.com/page',) not in db.get_unvisited_links()
+    assert db.get_visited_links_count() == 1
+    assert db.pages == []
