@@ -52,6 +52,26 @@ vector = ["pyarrow"]
 [project.scripts]
 crawler-to-md = "crawler_to_md.cli:main"
 
+# First-party pipeline plugins, discovered via the plugin registry. Third
+# parties register additional plugins under the same groups.
+[project.entry-points."crawler_to_md.formatters"]
+markdown = "crawler_to_md.plugins:MarkdownFormatter"
+json = "crawler_to_md.plugins:JsonFormatter"
+jsonl = "crawler_to_md.plugins:JsonlFormatter"
+llms = "crawler_to_md.plugins:LlmsFormatter"
+individual = "crawler_to_md.plugins:IndividualMarkdownFormatter"
+chunks = "crawler_to_md.plugins:ChunksFormatter"
+vectors = "crawler_to_md.plugins:VectorsFormatter"
+
+[project.entry-points."crawler_to_md.filters"]
+url-pattern = "crawler_to_md.plugins:UrlPatternFilter"
+
+[project.entry-points."crawler_to_md.processors"]
+noop = "crawler_to_md.plugins:NoOpProcessor"
+
+[project.entry-points."crawler_to_md.fetchers"]
+requests = "crawler_to_md.plugins:RequestsFetcher"
+
 # URLs related to the project repository and issue tracker
 [project.urls]
 Homepage = "https://github.com/obeone/crawler-to-md"
