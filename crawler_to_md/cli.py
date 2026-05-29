@@ -186,6 +186,60 @@ def main():
         help="Number of concurrent fetches (1 = synchronous, the default)",
         default=1,
     )
+    parser.add_argument(
+        "--ignore-robots",
+        action="store_true",
+        help="Ignore robots.txt rules (robots is honored by default)",
+        default=False,
+    )
+    parser.add_argument(
+        "--user-agent",
+        help="User-Agent string sent on every request (default: descriptive UA)",
+        default=None,
+    )
+    parser.add_argument(
+        "--sitemap",
+        action="store_true",
+        help="Seed the frontier from the host's /sitemap.xml before crawling",
+        default=False,
+    )
+    parser.add_argument(
+        "--extract",
+        choices=["none", "readability"],
+        help="Content extraction strategy (readability requires the "
+        "'readability' extra)",
+        default="none",
+    )
+    parser.add_argument(
+        "--render",
+        action="store_true",
+        help="Fetch JS-rendered HTML via Playwright (requires the 'render' extra)",
+        default=False,
+    )
+    parser.add_argument(
+        "--header",
+        action="append",
+        help="Extra request header as 'Key: Value'. Repeatable.",
+        default=[],
+    )
+    parser.add_argument(
+        "--cookie",
+        action="append",
+        help="Request cookie as 'key=value'. Repeatable.",
+        default=[],
+    )
+    parser.add_argument(
+        "--auth",
+        help="HTTP basic-auth credentials as 'user:pass'",
+        default=None,
+    )
+    parser.add_argument(
+        "--allow-types",
+        action="append",
+        help="Additional content-type to ingest via MarkItDown (e.g. "
+        "application/pdf). Repeatable.",
+        default=[],
+    )
 
     try:
         import argcomplete
@@ -276,6 +330,15 @@ def main():
             max_depth=args.max_depth,
             max_time=args.max_time,
             concurrency=args.concurrency,
+            ignore_robots=args.ignore_robots,
+            user_agent=args.user_agent,
+            sitemap=args.sitemap,
+            extract=args.extract,
+            render=args.render,
+            headers=args.header,
+            cookies=args.cookie,
+            auth=args.auth,
+            allow_types=args.allow_types,
         )
     except ValueError as exc:
         parser.error(str(exc))
