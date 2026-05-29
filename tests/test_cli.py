@@ -386,6 +386,7 @@ def test_cli_overwrite_cache(monkeypatch, tmp_path):
     def fake_init(self, db_path):
         captured['exists'] = os.path.exists(db_path)
         self.conn = sqlite3.connect(':memory:')
+        self.create_tables()
 
     monkeypatch.setattr(DatabaseManager, '__init__', fake_init)
     monkeypatch.setattr(ExportManager, 'export_to_markdown', lambda *a, **k: None)
@@ -419,6 +420,7 @@ def test_cli_overwrite_cache_short_option(monkeypatch, tmp_path):
     def fake_init(self, db_path):
         captured['exists'] = os.path.exists(db_path)
         self.conn = sqlite3.connect(':memory:')
+        self.create_tables()
 
     monkeypatch.setattr(DatabaseManager, '__init__', fake_init)
     monkeypatch.setattr(ExportManager, 'export_to_markdown', lambda *a, **k: None)

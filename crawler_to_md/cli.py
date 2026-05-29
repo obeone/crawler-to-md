@@ -3,6 +3,7 @@ import asyncio
 import logging
 import os
 import sys
+import time
 
 from . import log_setup, utils
 from .database_manager import DatabaseManager
@@ -240,6 +241,43 @@ def main():
         "application/pdf). Repeatable.",
         default=[],
     )
+    parser.add_argument(
+        "--export-jsonl",
+        action="store_true",
+        help="Export pages as JSON Lines (one {url, content, metadata} per line)",
+        default=False,
+    )
+    parser.add_argument(
+        "--export-llms",
+        action="store_true",
+        help="Export llms.txt (page index) and llms-full.txt (full content)",
+        default=False,
+    )
+    parser.add_argument(
+        "--frontmatter",
+        action=argparse.BooleanOptionalAction,
+        help="Prepend per-page YAML frontmatter to individual Markdown exports "
+        "(on by default; disable with --no-frontmatter)",
+        default=True,
+    )
+    parser.add_argument(
+        "--chunk-size",
+        type=int,
+        help="RAG chunk size in tokens (0 = disabled). Requires the 'rag' extra.",
+        default=0,
+    )
+    parser.add_argument(
+        "--chunk-overlap",
+        type=int,
+        help="RAG chunk overlap in tokens (used when --chunk-size > 0)",
+        default=0,
+    )
+    parser.add_argument(
+        "--export-vectors",
+        action="store_true",
+        help="Export pages to a Parquet file. Requires the 'vector' extra.",
+        default=False,
+    )
 
     try:
         import argcomplete
@@ -347,6 +385,7 @@ def main():
     # Start the scraping process. Concurrency > 1 selects the async crawl
     # engine; 1 (the default) uses the synchronous path for identical behavior.
     logger.info(f"Starting the scraping process for URL: {args.url}")
+    start_time = time.perf_counter()
     if args.concurrency > 1:
         asyncio.run(
             scraper.start_scraping_async(url=args.url, urls_list=urls_list)
@@ -373,9 +412,43 @@ def main():
     if args.export_individual:
         logger.info("Export of individual pages...")
         output_folder_ei = export_manager.export_individual_markdown(
-            output_folder=output, base_url=args.base_url
+            output_folder=output,
+            base_url=args.base_url,
+            frontmatter=args.frontmatter,
         )
         logger.info("Export of individual Markdown files completed.")
+
+    jsonl_path = os.path.join(output, f"{output_name}.jsonl")
+    if args.export_jsonl:
+        export_manager.export_to_jsonl(jsonl_path)
+        logger.info("Export to JSONL completed.")
+
+    llms_paths = None
+    if args.export_llms:
+        llms_paths = export_manager.export_to_llms(output)
+        logger.info("Export to llms.txt completed.")
+
+    chunks_path = os.path.join(output, "chunks.jsonl")
+    chunk_count = None
+    if args.chunk_size > 0:
+        try:
+            chunk_count = export_manager.export_chunks_jsonl(
+                chunks_path, args.chunk_size, args.chunk_overlap
+            )
+            logger.info("Export of RAG chunks completed.")
+        except ImportError as exc:
+            print("\033[91m", exc, "\033[0m")
+
+    vectors_path = os.path.join(output, f"{output_name}.parquet")
+    vector_rows = None
+    if args.export_vectors:
+        try:
+            vector_rows = export_manager.export_to_vectors(
+                vectors_path, args.chunk_size, args.chunk_overlap
+            )
+            logger.info("Export to Parquet completed.")
+        except ImportError as exc:
+            print("\033[91m", exc, "\033[0m")
 
     markdown_path = os.path.join(output, f"{output_name}.md")
     json_path = os.path.join(output, f"{output_name}.json")
@@ -388,6 +461,49 @@ def main():
             "\033[95mIndividual Markdown files exported to: \033[0m",
             output_folder_ei,
         )
+    if args.export_jsonl:
+        print("\033[96mJSONL file generated at: \033[0m", jsonl_path)
+    if args.export_llms and llms_paths:
+        print("\033[96mllms.txt files generated at: \033[0m", llms_paths[0])
+    if chunk_count is not None:
+        print("\033[96mRAG chunks file generated at: \033[0m", chunks_path)
+    if vector_rows is not None:
+        print("\033[96mParquet vectors file generated at: \033[0m", vectors_path)
+
+    duration = time.perf_counter() - start_time
+    _print_run_summary(export_manager, db_manager, duration)
+
+
+def _print_run_summary(export_manager, db_manager, duration):
+    """
+    Print an end-of-run summary report to stdout.
+
+    The report covers the crawl frontier (total vs visited links), the corpus
+    size (pages and bytes of content), total token usage (exact via tiktoken
+    when the ``rag`` extra is installed, otherwise a labelled word-based
+    estimate) and the wall-clock duration.
+
+    Args:
+        export_manager (ExportManager): Used to compute corpus token totals.
+        db_manager (DatabaseManager): Source of link/page counts.
+        duration (float): Wall-clock crawl duration in seconds.
+    """
+    total_links = db_manager.get_links_count()
+    visited_links = db_manager.get_visited_links_count()
+    pages = db_manager.get_all_pages()
+    page_count = sum(1 for _u, content, _m in pages if content is not None)
+    total_bytes = sum(
+        len((content or "").encode("utf-8")) for _u, content, _m in pages
+    )
+    total_tokens, method, _measured = export_manager.compute_token_totals()
+
+    print("\033[1m\nRun summary\033[0m")
+    print(f"  Links discovered : {total_links}")
+    print(f"  Pages scraped    : {visited_links}")
+    print(f"  Pages stored     : {page_count}")
+    print(f"  Content bytes    : {total_bytes}")
+    print(f"  Total tokens     : {total_tokens} ({method})")
+    print(f"  Duration         : {duration:.2f}s")
 
 
 if __name__ == "__main__":
