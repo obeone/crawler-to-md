@@ -1,9 +1,7 @@
+import logging
 from urllib.parse import urlparse, urlunparse
 
-from . import log_setup
-
-logger = log_setup.get_logger()
-logger.name = "utils"
+logger = logging.getLogger(__name__)
 
 
 def randomstring_to_filename(random_string):

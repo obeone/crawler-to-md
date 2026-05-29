@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import sys
 
@@ -7,14 +8,21 @@ from .database_manager import DatabaseManager
 from .export_manager import ExportManager
 from .scraper import Scraper
 
-# Setup logging based on environment variable or default to WARN level
-# before importing other modules.
-log_level = os.getenv("LOG_LEVEL", "WARN")
-log_setup.setup_logging(log_level)
+logger = logging.getLogger(__name__)
 
 
-logger = log_setup.get_logger()
-logger.name = "main"
+def configure_logging():
+    """
+    Configure application logging based on the environment.
+
+    Reads the desired level from the ``LOG_LEVEL`` environment variable
+    (defaulting to ``WARN``) and installs the Tqdm-aware coloredlogs handler
+    on the root logger. This is invoked explicitly from :func:`main` rather
+    than at import time so that importing the package never mutates global
+    logging state as a side effect.
+    """
+    log_level = os.getenv("LOG_LEVEL", "WARN")
+    log_setup.setup_logging(log_level)
 
 
 def main():
@@ -27,6 +35,7 @@ def main():
     Raises:
         ValueError: If neither a URL nor a URLs file is provided.
     """
+    configure_logging()
     logger.info("Starting the web scraper application.")
 
 
