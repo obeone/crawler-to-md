@@ -2,13 +2,16 @@ import asyncio
 import copy
 import json
 import logging
+import mimetypes
 import os
 import random
 import tempfile
 import time
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from email.utils import parsedate_to_datetime
-from urllib.parse import urldefrag, urljoin
+from urllib import robotparser
+from urllib.parse import urldefrag, urljoin, urlparse
 
 import httpx
 import requests
@@ -27,6 +30,60 @@ _RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
 
 # Upper bound for a single backoff sleep, in seconds, to avoid pathological waits.
 _MAX_BACKOFF = 30.0
+
+# Cap on how many nested sitemap files are followed from a sitemap index, to
+# bound work on pathological or recursive sitemap trees.
+_MAX_SITEMAP_DEPTH = 5
+
+
+def _default_user_agent():
+    """
+    Build the default descriptive User-Agent string for the crawler.
+
+    The version is resolved from the installed package metadata when available,
+    falling back to ``0.0.0`` for editable/unbuilt checkouts.
+
+    Returns:
+        str: A descriptive User-Agent such as
+        ``"crawler-to-md/1.2.3 (+https://github.com/obeone/crawler-to-md)"``.
+    """
+    try:
+        from importlib.metadata import PackageNotFoundError, version
+
+        try:
+            package_version = version("crawler-to-md")
+        except PackageNotFoundError:
+            package_version = "0.0.0"
+    except Exception:  # pragma: no cover - importlib always present on 3.10+
+        package_version = "0.0.0"
+    return (
+        f"crawler-to-md/{package_version} "
+        "(+https://github.com/obeone/crawler-to-md)"
+    )
+
+
+class _RenderedResponse:
+    """
+    Minimal response-like wrapper around HTML produced by JS rendering.
+
+    Exposes the small subset of the ``requests``/``httpx`` response interface
+    consumed by the crawl loops (``status_code``, ``headers``, ``text``,
+    ``content``) so rendered pages flow through the same processing path as
+    fetched HTML responses.
+    """
+
+    def __init__(self, html):
+        """
+        Wrap rendered HTML in a response-like object.
+
+        Args:
+            html (str | None): The rendered HTML, or ``None`` if rendering
+                produced no content (treated as a non-success status).
+        """
+        self.status_code = 200 if html is not None else 599
+        self.text = html or ""
+        self.content = (html or "").encode("utf-8")
+        self.headers = {"content-type": "text/html"}
 
 
 class Scraper:
@@ -47,6 +104,15 @@ class Scraper:
         max_depth=-1,
         max_time=0,
         concurrency=1,
+        ignore_robots=False,
+        user_agent=None,
+        sitemap=False,
+        extract="none",
+        render=False,
+        headers=None,
+        cookies=None,
+        auth=None,
+        allow_types=None,
     ):
         """
         Initialize the Scraper object and log the initialization process.
@@ -78,6 +144,32 @@ class Scraper:
             concurrency (int, optional): Number of concurrent fetches for the
                 async crawl path. ``1`` (the default) behaves exactly like the
                 synchronous path; values greater than ``1`` fetch in parallel.
+            ignore_robots (bool, optional): When ``False`` (the default), the
+                crawler honors each host's ``robots.txt`` and skips disallowed
+                URLs. Set ``True`` to ignore robots rules entirely.
+            user_agent (str, optional): User-Agent string sent on every request
+                and used for robots evaluation. Defaults to a descriptive UA
+                built from the package version.
+            sitemap (bool, optional): When ``True``, seed the frontier from the
+                host's ``/sitemap.xml`` (following sitemap indexes) before
+                crawling. Defaults to ``False``.
+            extract ({"none", "readability"}, optional): Content extraction
+                strategy. ``"readability"`` uses ``trafilatura`` (optional
+                ``readability`` extra) to extract the main content before
+                Markdown conversion. Defaults to ``"none"``.
+            render (bool, optional): When ``True``, fetch the JS-rendered HTML
+                via Playwright (optional ``render`` extra) instead of a plain
+                HTTP GET. Defaults to ``False``.
+            headers (list[str] | dict | None, optional): Extra request headers
+                as ``"Key: Value"`` strings (or a mapping). Applied to both the
+                sync session and the async client.
+            cookies (list[str] | dict | None, optional): Cookies as ``"key=value"``
+                strings (or a mapping). Applied to both transports.
+            auth (str | None, optional): HTTP basic-auth credentials as
+                ``"user:pass"``. Applied to both transports.
+            allow_types (list[str] | None, optional): Additional content-type
+                base values (e.g. ``"application/pdf"``) to ingest via MarkItDown
+                in addition to HTML. Links are only discovered from HTML pages.
 
         Raises:
             ValueError: If a proxy is provided but unreachable.
@@ -95,7 +187,33 @@ class Scraper:
         self.max_depth = max_depth
         self.max_time = max_time
         self.concurrency = max(1, concurrency)
+
+        # Crawl-intelligence configuration.
+        self.ignore_robots = ignore_robots
+        self.user_agent = user_agent or _default_user_agent()
+        self.sitemap = sitemap
+        self.extract = extract or "none"
+        self.render = render
+        self.allow_types = {
+            t.split(";")[0].strip().lower() for t in (allow_types or []) if t
+        }
+        # Per-host cache of parsed robots rules (``None`` means "allow all").
+        self._robots_cache = {}
+
+        # Build request headers/cookies/auth shared by both transports. The
+        # descriptive User-Agent is applied first so an explicit ``--header
+        # 'User-Agent: ...'`` can still override it.
+        self._headers = {"User-Agent": self.user_agent}
+        self._headers.update(self._build_headers(headers))
+        self._cookies = self._build_cookies(cookies)
+        self._auth = self._build_auth(auth)
+
         self.session = requests.Session()
+        self.session.headers.update(self._headers)
+        if self._cookies:
+            self.session.cookies.update(self._cookies)
+        if self._auth:
+            self.session.auth = self._auth
         if proxy:
             self.session.proxies.update({"http": proxy, "https": proxy})
         self.proxy = proxy
@@ -105,6 +223,79 @@ class Scraper:
 
         if proxy:
             self._test_proxy()
+
+    @staticmethod
+    def _build_headers(headers):
+        """
+        Normalize the ``headers`` argument into a header dictionary.
+
+        Accepts either a mapping or a list of ``"Key: Value"`` strings. The
+        configured User-Agent is added by the caller; user-supplied headers may
+        override it.
+
+        Args:
+            headers (list[str] | dict | None): Raw header specification.
+
+        Returns:
+            dict[str, str]: The parsed headers (empty dict if none provided).
+        """
+        result = {}
+        if not headers:
+            return result
+        if isinstance(headers, dict):
+            return {str(k): str(v) for k, v in headers.items()}
+        for item in headers:
+            if ":" in item:
+                key, _, value = item.partition(":")
+                result[key.strip()] = value.strip()
+            else:
+                logger.warning("Ignoring malformed header (expected 'K: V'): %s", item)
+        return result
+
+    @staticmethod
+    def _build_cookies(cookies):
+        """
+        Normalize the ``cookies`` argument into a cookie dictionary.
+
+        Accepts either a mapping or a list of ``"key=value"`` strings.
+
+        Args:
+            cookies (list[str] | dict | None): Raw cookie specification.
+
+        Returns:
+            dict[str, str]: The parsed cookies (empty dict if none provided).
+        """
+        result = {}
+        if not cookies:
+            return result
+        if isinstance(cookies, dict):
+            return {str(k): str(v) for k, v in cookies.items()}
+        for item in cookies:
+            if "=" in item:
+                key, _, value = item.partition("=")
+                result[key.strip()] = value.strip()
+            else:
+                logger.warning("Ignoring malformed cookie (expected 'k=v'): %s", item)
+        return result
+
+    @staticmethod
+    def _build_auth(auth):
+        """
+        Normalize the ``auth`` argument into a ``(user, password)`` tuple.
+
+        Args:
+            auth (str | tuple | None): ``"user:pass"`` string or a 2-tuple.
+
+        Returns:
+            tuple[str, str] | None: The credential pair, or ``None`` when no
+            authentication is configured.
+        """
+        if not auth:
+            return None
+        if isinstance(auth, (tuple, list)) and len(auth) == 2:
+            return (str(auth[0]), str(auth[1]))
+        user, _, password = str(auth).partition(":")
+        return (user, password)
 
     def _test_proxy(self):
         """
@@ -276,6 +467,419 @@ class Scraper:
         logger.debug(f"Link validation for {link}: {valid}")
         return valid
 
+    @staticmethod
+    def _robots_host_key(url):
+        """
+        Return the ``scheme://netloc`` key used to cache robots rules per host.
+
+        Args:
+            url (str): Any URL on the target host.
+
+        Returns:
+            str: The origin key (e.g. ``"https://example.com"``).
+        """
+        parsed = urlparse(url)
+        return f"{parsed.scheme}://{parsed.netloc}"
+
+    @staticmethod
+    def _robots_url(url):
+        """
+        Build the ``robots.txt`` URL for the host of ``url``.
+
+        Args:
+            url (str): Any URL on the target host.
+
+        Returns:
+            str: The absolute ``robots.txt`` URL for that host.
+        """
+        parsed = urlparse(url)
+        return f"{parsed.scheme}://{parsed.netloc}/robots.txt"
+
+    def _parser_from_text(self, text):
+        """
+        Build a :class:`urllib.robotparser.RobotFileParser` from rules text.
+
+        Args:
+            text (str): The body of a ``robots.txt`` file.
+
+        Returns:
+            urllib.robotparser.RobotFileParser: A parser primed with the rules.
+        """
+        parser = robotparser.RobotFileParser()
+        parser.parse((text or "").splitlines())
+        return parser
+
+    def _robots_allowed(self, url):
+        """
+        Check whether ``url`` may be fetched according to the host's robots.txt.
+
+        Robots files are fetched once per host through the synchronous session
+        and cached. Any fetch/parse failure or non-200 response is treated as
+        "allow all" (cached as ``None``), matching common crawler behavior.
+
+        Args:
+            url (str): The URL to check.
+
+        Returns:
+            bool: ``True`` if fetching is permitted (or robots is unavailable),
+            ``False`` if the host explicitly disallows ``url``.
+        """
+        key = self._robots_host_key(url)
+        if key not in self._robots_cache:
+            parser = None
+            try:
+                response = self.session.get(
+                    self._robots_url(url), timeout=self.timeout
+                )
+                if response is not None and response.status_code == 200:
+                    parser = self._parser_from_text(response.text)
+            except requests.RequestException as exc:
+                logger.debug("Could not fetch robots.txt for %s: %s", key, exc)
+            self._robots_cache[key] = parser
+        parser = self._robots_cache[key]
+        if parser is None:
+            return True
+        return parser.can_fetch(self.user_agent, url)
+
+    async def _arobots_allowed(self, client, url):
+        """
+        Async counterpart of :meth:`_robots_allowed` using the async client.
+
+        Shares the same per-host cache so robots is fetched at most once per
+        host regardless of which crawl path is active.
+
+        Args:
+            client (httpx.AsyncClient): The async client used to fetch robots.
+            url (str): The URL to check.
+
+        Returns:
+            bool: ``True`` if fetching is permitted, ``False`` otherwise.
+        """
+        key = self._robots_host_key(url)
+        if key not in self._robots_cache:
+            parser = None
+            try:
+                response = await client.get(self._robots_url(url))
+                if response is not None and response.status_code == 200:
+                    parser = self._parser_from_text(response.text)
+            except httpx.RequestError as exc:
+                logger.debug("Could not fetch robots.txt for %s: %s", key, exc)
+            self._robots_cache[key] = parser
+        parser = self._robots_cache[key]
+        if parser is None:
+            return True
+        return parser.can_fetch(self.user_agent, url)
+
+    def _sitemap_base_url(self):
+        """
+        Determine the origin used to locate the default ``sitemap.xml``.
+
+        Returns:
+            str: The ``scheme://netloc`` origin derived from ``base_url``.
+        """
+        parsed = urlparse(self.base_url)
+        return f"{parsed.scheme}://{parsed.netloc}"
+
+    def _collect_sitemap_urls(self, sitemap_url, seen, depth=0):
+        """
+        Recursively collect page URLs from a sitemap or sitemap index.
+
+        Tolerates missing files, non-200/204 responses, empty bodies, and
+        non-XML content by returning an empty list rather than raising.
+
+        Args:
+            sitemap_url (str): URL of the sitemap (or sitemap index) to fetch.
+            seen (set[str]): Set of already-fetched sitemap URLs (cycle guard).
+            depth (int): Current recursion depth into nested sitemap indexes.
+
+        Returns:
+            list[str]: The ``<loc>`` page URLs discovered (deepest-first order
+            is not guaranteed; duplicates are possible and filtered later).
+        """
+        if depth > _MAX_SITEMAP_DEPTH or sitemap_url in seen:
+            return []
+        seen.add(sitemap_url)
+        try:
+            response = self.session.get(sitemap_url, timeout=self.timeout)
+        except requests.RequestException as exc:
+            logger.warning("Sitemap fetch failed for %s: %s", sitemap_url, exc)
+            return []
+        if (
+            response is None
+            or response.status_code != 200
+            or not getattr(response, "content", b"")
+        ):
+            logger.debug("No usable sitemap at %s", sitemap_url)
+            return []
+        try:
+            root = ET.fromstring(response.content)
+        except ET.ParseError as exc:
+            logger.warning("Sitemap parse failed for %s: %s", sitemap_url, exc)
+            return []
+
+        locs = [
+            element.text.strip()
+            for element in root.iter()
+            if element.tag.split("}")[-1].lower() == "loc" and element.text
+        ]
+        root_tag = root.tag.split("}")[-1].lower()
+        if root_tag == "sitemapindex":
+            urls = []
+            for child in locs:
+                urls.extend(self._collect_sitemap_urls(child, seen, depth + 1))
+            return urls
+        return locs
+
+    def _seed_from_sitemap(self):
+        """
+        Seed the crawl frontier from the host's ``sitemap.xml``.
+
+        Discovered URLs are validated via :meth:`is_valid_link`, canonicalized,
+        and inserted at depth 0. Missing or malformed sitemaps are ignored.
+
+        Returns:
+            int: The number of valid URLs seeded from the sitemap.
+        """
+        sitemap_url = urljoin(self._sitemap_base_url() + "/", "sitemap.xml")
+        logger.info("Seeding frontier from sitemap %s", sitemap_url)
+        discovered = self._collect_sitemap_urls(sitemap_url, set())
+        seeded = []
+        for candidate in discovered:
+            if self.is_valid_link(candidate):
+                seeded.append(utils.canonicalize_url(candidate))
+        if seeded:
+            self.db_manager.insert_link(utils.deduplicate_list(seeded), depth=0)
+        logger.info("Seeded %d URL(s) from sitemap", len(seeded))
+        return len(seeded)
+
+    def _import_trafilatura(self):
+        """
+        Lazily import ``trafilatura`` for readability extraction.
+
+        Returns:
+            module: The imported ``trafilatura`` module.
+
+        Raises:
+            RuntimeError: If the optional ``readability`` extra is not installed.
+        """
+        try:
+            import trafilatura
+        except ImportError as exc:
+            raise RuntimeError(
+                "Readability extraction requires the 'readability' extra. "
+                "Install it with: pip install crawler-to-md[readability]"
+            ) from exc
+        return trafilatura
+
+    def _scrape_readability(self, html, url):
+        """
+        Extract the main content of ``html`` as Markdown via ``trafilatura``.
+
+        Args:
+            html (str): The raw HTML of the page.
+            url (str): The source URL (used for logging and metadata).
+
+        Returns:
+            tuple[str | None, dict | None]: ``(markdown, metadata)`` or
+            ``(None, None)`` if no main content could be extracted.
+
+        Raises:
+            RuntimeError: If the optional ``readability`` extra is missing.
+        """
+        trafilatura = self._import_trafilatura()
+        soup = BeautifulSoup(html, "html.parser")
+        title = soup.title.string if soup.title else ""
+        content = trafilatura.extract(
+            html, output_format="markdown", include_comments=False
+        )
+        if not content or not content.strip():
+            logger.warning("Readability extraction produced no content for %s", url)
+            return None, None
+        return content, {"title": title}
+
+    def _render_sync(self, url):
+        """
+        Fetch the JS-rendered HTML of ``url`` using Playwright (sync API).
+
+        Args:
+            url (str): The URL to render.
+
+        Returns:
+            str: The rendered HTML.
+
+        Raises:
+            RuntimeError: If the optional ``render`` extra (or its browsers) is
+            missing, or if rendering fails. The message explains how to install
+            the extra and the browser binaries.
+        """
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError as exc:
+            raise RuntimeError(
+                "JS rendering requires the 'render' extra. Install it with: "
+                "pip install crawler-to-md[render]"
+            ) from exc
+        try:
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch()
+                try:
+                    page = browser.new_page(user_agent=self.user_agent)
+                    page.goto(url, timeout=self.timeout * 1000)
+                    return page.content()
+                finally:
+                    browser.close()
+        except Exception as exc:
+            raise RuntimeError(
+                f"JS rendering failed for {url}: {exc}. Ensure the Playwright "
+                "browsers are installed (run: playwright install chromium)."
+            ) from exc
+
+    async def _render_async(self, url):
+        """
+        Fetch the JS-rendered HTML of ``url`` using Playwright (async API).
+
+        Args:
+            url (str): The URL to render.
+
+        Returns:
+            str: The rendered HTML.
+
+        Raises:
+            RuntimeError: If the optional ``render`` extra (or its browsers) is
+            missing, or if rendering fails.
+        """
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError as exc:
+            raise RuntimeError(
+                "JS rendering requires the 'render' extra. Install it with: "
+                "pip install crawler-to-md[render]"
+            ) from exc
+        try:
+            async with async_playwright() as playwright:
+                browser = await playwright.chromium.launch()
+                try:
+                    page = await browser.new_page(user_agent=self.user_agent)
+                    await page.goto(url, timeout=self.timeout * 1000)
+                    return await page.content()
+                finally:
+                    await browser.close()
+        except Exception as exc:
+            raise RuntimeError(
+                f"JS rendering failed for {url}: {exc}. Ensure the Playwright "
+                "browsers are installed (run: playwright install chromium)."
+            ) from exc
+
+    def _convert_binary(self, content, content_type):
+        """
+        Convert non-HTML bytes to Markdown via MarkItDown using a temp file.
+
+        Args:
+            content (bytes): The raw response body.
+            content_type (str): The response content-type (used to pick a
+                sensible temp-file suffix so MarkItDown selects a converter).
+
+        Returns:
+            str: The Markdown produced by MarkItDown (possibly empty).
+        """
+        base = content_type.split(";")[0].strip().lower()
+        suffix = mimetypes.guess_extension(base) or ""
+        with tempfile.NamedTemporaryFile(
+            mode="wb", delete=False, suffix=suffix
+        ) as tmp:
+            tmp.write(content or b"")
+            tmp_path = tmp.name
+        try:
+            return str(MarkItDown().convert(tmp_path))
+        finally:
+            os.remove(tmp_path)
+
+    def _store_and_discover(self, html, url, depth, urls_list, pbar):
+        """
+        Scrape an HTML page, persist it, and enqueue newly discovered links.
+
+        Args:
+            html (str): The page HTML.
+            url (str): The page URL.
+            depth (int): The crawl depth of this page.
+            urls_list (list | None): The predefined URL list, if any. When set,
+                no new links are discovered.
+            pbar (tqdm.tqdm): Progress bar whose total grows with new links.
+        """
+        content, metadata = self.scrape_page(html, url)
+        self.db_manager.insert_page(url, content, json.dumps(metadata))
+
+        discover = self.max_depth < 0 or depth < self.max_depth
+        if urls_list or not discover:
+            return
+        new_links = self.fetch_links(html=html, url=url)
+        real_new_links_count = 0
+        for new_url in new_links:
+            canonical = utils.canonicalize_url(new_url)
+            if self.db_manager.insert_link(canonical, depth=depth + 1):
+                real_new_links_count += 1
+                logger.debug("Inserted new link %s into the database", canonical)
+        if real_new_links_count:
+            pbar.total += real_new_links_count
+            pbar.refresh()
+
+    def _store_binary(self, url, content, content_type):
+        """
+        Convert and persist a non-HTML document; no link discovery is performed.
+
+        Args:
+            url (str): The document URL.
+            content (bytes): The raw response body.
+            content_type (str): The response content-type.
+        """
+        markdown = self._convert_binary(content, content_type)
+        metadata = {"title": url, "content_type": content_type}
+        self.db_manager.insert_page(url, markdown, json.dumps(metadata))
+
+    def _process_response(self, url, response, depth, urls_list, pbar):
+        """
+        Persist a fetched response, dispatching by content type.
+
+        HTML responses are scraped and may discover new links. Responses whose
+        content type is listed in ``allow_types`` are ingested as non-HTML
+        documents (no discovery). The link is always marked visited.
+
+        Args:
+            url (str): The fetched URL.
+            response: A response-like object exposing ``status_code``,
+                ``headers``, ``text`` and ``content`` (``requests``/``httpx``
+                response or :class:`_RenderedResponse`), or ``None``.
+            depth (int): The crawl depth of this URL.
+            urls_list (list | None): The predefined URL list, if any.
+            pbar (tqdm.tqdm): Progress bar to update on link discovery.
+
+        Returns:
+            bool: ``True`` if a page/document was stored (counts toward the
+            ``max_pages`` bound), ``False`` if the response was skipped.
+        """
+        if response is None or response.status_code != 200:
+            self.db_manager.mark_link_visited(url)
+            logger.info("Skipping link %s due to invalid status code", url)
+            return False
+
+        content_type = response.headers.get("content-type", "")
+        if content_type.startswith("text/html"):
+            self._store_and_discover(response.text, url, depth, urls_list, pbar)
+            self.db_manager.mark_link_visited(url)
+            return True
+
+        base = content_type.split(";")[0].strip().lower()
+        if base in self.allow_types:
+            self._store_binary(url, response.content, content_type)
+            self.db_manager.mark_link_visited(url)
+            return True
+
+        self.db_manager.mark_link_visited(url)
+        logger.info(
+            "Skipping link %s due to unsupported content type %s", url, content_type
+        )
+        return False
+
     def fetch_links(self, url, html=None):
         """
         Fetch all valid links from the given URL.
@@ -342,6 +946,11 @@ class Scraper:
             tuple: A tuple containing the extracted content and metadata of the page.
         """
         logger.info(f"Scraping page {url}")
+
+        # Readability extraction bypasses the include/exclude + MarkItDown
+        # pipeline and lets trafilatura isolate the main content directly.
+        if self.extract == "readability":
+            return self._scrape_readability(html, url)
 
         try:
             # Parse the content using BeautifulSoup
@@ -427,6 +1036,10 @@ class Scraper:
             # Insert a single canonicalized URL if provided
             self.db_manager.insert_link(utils.canonicalize_url(url), depth=0)
 
+        # Optionally seed additional URLs from the host's sitemap.
+        if self.sitemap:
+            self._seed_from_sitemap()
+
         # Log the start of the scraping process
         logger.info("Starting scraping process")
 
@@ -500,70 +1113,33 @@ class Scraper:
                 url = link[0]  # Extract the URL from the link tuple
                 depth = link[1] if len(link) > 1 else 0  # Crawl depth of the link
 
-                # Attempt to fetch the page content with retry/backoff. Network
-                # failures that survive all retries must not crash the crawl
-                # loop: log, mark visited, and move on to the next link.
-                try:
-                    response = self._get_with_retry(url)
-                except requests.RequestException as exc:
-                    logger.warning("Failed to fetch %s: %s", url, exc)
+                # Honor robots.txt unless explicitly disabled.
+                if not self.ignore_robots and not self._robots_allowed(url):
+                    logger.info("Skipping %s (disallowed by robots.txt)", url)
                     self.db_manager.mark_link_visited(url)
                     continue
+
+                # Obtain the page. JS rendering substitutes a plain GET with a
+                # rendered-HTML response; otherwise fetch with retry/backoff.
+                # Network failures that survive all retries must not crash the
+                # crawl loop: log, mark visited, and move on to the next link.
+                if self.render:
+                    response = _RenderedResponse(self._render_sync(url))
+                else:
+                    try:
+                        response = self._get_with_retry(url)
+                    except requests.RequestException as exc:
+                        logger.warning("Failed to fetch %s: %s", url, exc)
+                        self.db_manager.mark_link_visited(url)
+                        continue
 
                 # Increment request count for rate limiting
                 request_count += 1
 
-                # Check for a successful response and correct content type. A
-                # retryable status that survived all retries lands here and is
-                # only now marked visited (not before retries were exhausted).
-                if (
-                    response is None
-                    or response.status_code != 200
-                    or not response.headers.get("content-type", "").startswith(
-                        "text/html"
-                    )
-                ):
-                    # Mark the link as visited and log the reason for skipping
-                    self.db_manager.mark_link_visited(url)
-                    logger.info(
-                        "Skipping link %s due to invalid status code or content type",
-                        url,
-                    )
-                    continue
-
-                # Extract the HTML content from the response
-                html = response.text
-
-                # Scrape the page for content and metadata
-                content, metadata = self.scrape_page(html, url)
-
-                # Insert the scraped data into the database
-                self.db_manager.insert_page(url, content, json.dumps(metadata))
-                scraped_count += 1
-
-                # Fetch and insert new links found on the page, if not working
-                # from a predefined list and still within the depth bound.
-                discover = self.max_depth < 0 or depth < self.max_depth
-                if not urls_list and discover:
-                    new_links = self.fetch_links(html=html, url=url)
-
-                    # Count and insert new links into the database at depth+1.
-                    real_new_links_count = 0
-                    for new_url in new_links:
-                        canonical = utils.canonicalize_url(new_url)
-                        if self.db_manager.insert_link(canonical, depth=depth + 1):
-                            real_new_links_count += 1
-                            logger.debug(
-                                f"Inserted new link {canonical} into the database"
-                            )
-
-                    # Update the progress bar total with the count of new links
-                    if real_new_links_count:
-                        pbar.total += real_new_links_count
-                        pbar.refresh()
-
-                # Mark the current link as visited in the database
-                self.db_manager.mark_link_visited(url)
+                # Persist the response (HTML or an allowed non-HTML document),
+                # marking the link visited and counting stored pages.
+                if self._process_response(url, response, depth, urls_list, pbar):
+                    scraped_count += 1
 
             # Break the outer loop too when a crawl bound has been reached.
             if stop:
@@ -587,6 +1163,9 @@ class Scraper:
             timeout=self.timeout,
             follow_redirects=True,
             proxy=self.proxy,
+            headers=self._headers or None,
+            cookies=self._cookies or None,
+            auth=self._auth,
         )
 
     async def _aget_with_retry(self, client, url):
@@ -678,6 +1257,11 @@ class Scraper:
         async with semaphore:
             if self.delay > 0:
                 await asyncio.sleep(self.delay)
+            if self.render:
+                try:
+                    return (url, _RenderedResponse(await self._render_async(url)), None)
+                except RuntimeError as exc:
+                    return (url, None, exc)
             try:
                 response = await self._aget_with_retry(client, url)
                 return (url, response, None)
@@ -714,6 +1298,10 @@ class Scraper:
             self.db_manager.insert_link(validated_urls, depth=0)
         elif url:
             self.db_manager.insert_link(utils.canonicalize_url(url), depth=0)
+
+        # Optionally seed additional URLs from the host's sitemap.
+        if self.sitemap:
+            self._seed_from_sitemap()
 
         logger.info(
             "Starting async scraping process (concurrency=%d)", self.concurrency
@@ -774,11 +1362,29 @@ class Scraper:
                         link[0]: (link[1] if len(link) > 1 else 0) for link in batch
                     }
 
+                    # Honor robots.txt before fetching: drop disallowed URLs
+                    # from the batch (robots is fetched at most once per host).
+                    allowed_batch = []
+                    for link in batch:
+                        candidate = link[0]
+                        if not self.ignore_robots and not await self._arobots_allowed(
+                            client, candidate
+                        ):
+                            logger.info(
+                                "Skipping %s (disallowed by robots.txt)", candidate
+                            )
+                            self.db_manager.mark_link_visited(candidate)
+                            pbar.update(1)
+                        else:
+                            allowed_batch.append(link)
+                    if not allowed_batch:
+                        continue
+
                     # Fetch the batch concurrently (DB untouched here).
                     results = await asyncio.gather(
                         *(
                             self._afetch_one(client, link[0], semaphore)
-                            for link in batch
+                            for link in allowed_batch
                         )
                     )
                     request_count += len(results)
@@ -797,7 +1403,7 @@ class Scraper:
                             stop = True
                             break
 
-                        # Persistent transport error: mark visited and move on.
+                        # Persistent transport/render error: mark visited, skip.
                         if error is not None:
                             logger.warning(
                                 "Failed to fetch %s: %s", fetched_url, error
@@ -805,48 +1411,11 @@ class Scraper:
                             self.db_manager.mark_link_visited(fetched_url)
                             continue
 
-                        # Skip non-200 / non-HTML responses (retries exhausted).
-                        if (
-                            response is None
-                            or response.status_code != 200
-                            or not response.headers.get(
-                                "content-type", ""
-                            ).startswith("text/html")
+                        # Persist the response (HTML or an allowed non-HTML
+                        # document); marks visited and discovers links for HTML.
+                        if self._process_response(
+                            fetched_url, response, depth, urls_list, pbar
                         ):
-                            self.db_manager.mark_link_visited(fetched_url)
-                            logger.info(
-                                "Skipping link %s due to invalid status code or "
-                                "content type",
-                                fetched_url,
-                            )
-                            continue
-
-                        html = response.text
-                        content, metadata = self.scrape_page(html, fetched_url)
-                        self.db_manager.insert_page(
-                            fetched_url, content, json.dumps(metadata)
-                        )
-                        scraped_count += 1
-
-                        # Discover new links while within the depth bound.
-                        discover = self.max_depth < 0 or depth < self.max_depth
-                        if not urls_list and discover:
-                            new_links = self.fetch_links(html=html, url=fetched_url)
-                            real_new_links_count = 0
-                            for new_url in new_links:
-                                canonical = utils.canonicalize_url(new_url)
-                                if self.db_manager.insert_link(
-                                    canonical, depth=depth + 1
-                                ):
-                                    real_new_links_count += 1
-                                    logger.debug(
-                                        "Inserted new link %s into the database",
-                                        canonical,
-                                    )
-                            if real_new_links_count:
-                                pbar.total += real_new_links_count
-                                pbar.refresh()
-
-                        self.db_manager.mark_link_visited(fetched_url)
+                            scraped_count += 1
         finally:
             pbar.close()
