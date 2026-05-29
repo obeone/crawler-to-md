@@ -14,6 +14,13 @@ class DatabaseManager:
         """
         logger.debug(f"Connecting to the database at {db_path}")
         self.conn = sqlite3.connect(db_path)
+        # Enable Write-Ahead Logging for better concurrency and crash safety.
+        # WAL is not supported for in-memory databases, so skip it there.
+        if db_path != ":memory:":
+            try:
+                self.conn.execute("PRAGMA journal_mode=WAL")
+            except sqlite3.Error as exc:
+                logger.warning("Could not enable WAL journal mode: %s", exc)
         self.create_tables()
 
     def create_tables(self):
@@ -142,9 +149,51 @@ class DatabaseManager:
             cursor = self.conn.execute("SELECT url, content, metadata FROM pages")
             return cursor.fetchall()
 
+    def close(self):
+        """
+        Close the underlying SQLite connection if it is still open.
+
+        This method is idempotent: calling it more than once, or after the
+        connection has already been closed, is safe and has no effect.
+        """
+        conn = getattr(self, "conn", None)
+        if conn is not None:
+            logger.debug("Closing the database connection")
+            conn.close()
+            self.conn = None
+
+    def __enter__(self):
+        """
+        Enter the runtime context and return the manager itself.
+
+        Returns:
+            DatabaseManager: This instance, ready for use within a ``with`` block.
+        """
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """
+        Exit the runtime context, ensuring the database connection is closed.
+
+        Args:
+            exc_type (type | None): Exception type raised in the context, if any.
+            exc_value (BaseException | None): Exception instance raised, if any.
+            traceback (types.TracebackType | None): Traceback associated with the
+                exception, if any.
+
+        Returns:
+            bool: ``False`` so that any exception raised within the context is
+            propagated rather than suppressed.
+        """
+        self.close()
+        return False
+
     def __del__(self):
         """
-        Close the database connection when the object is deleted.
+        Close the database connection when the object is garbage collected.
+
+        Acts as a safety net only; the connection is guarded with
+        :func:`getattr` so that a partially initialized instance (where
+        ``conn`` was never assigned) does not raise during deletion.
         """
-        logger.debug("Closing the database connection")
-        self.conn.close()
+        self.close()
