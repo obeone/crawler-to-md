@@ -1,4 +1,4 @@
-# Web Scraper to Markdown 🌐✍️
+# crawler-to-md 🌐✍️
 
 This Python-based web scraper fetches content from URLs and exports it into Markdown and JSON formats, specifically designed for simplicity, extensibility, and for uploading JSON files to GPT models. It is ideal for those looking to leverage web content for AI training or analysis. 🤖💡
 
