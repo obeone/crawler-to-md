@@ -1,7 +1,33 @@
+import hashlib
 import logging
 import sqlite3
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
+
+
+def _utcnow_iso():
+    """
+    Return the current UTC time as an ISO 8601 string.
+
+    Returns:
+        str: The current UTC timestamp (e.g. ``"2026-05-29T12:34:56.789+00:00"``).
+    """
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _content_hash(content):
+    """
+    Compute a stable SHA-256 hash of page content.
+
+    Args:
+        content (str | None): The page content. ``None`` is treated as an
+            empty string so that missing content hashes deterministically.
+
+    Returns:
+        str: The hexadecimal SHA-256 digest of the content.
+    """
+    return hashlib.sha256((content or "").encode("utf-8")).hexdigest()
 
 
 class DatabaseManager:
@@ -26,6 +52,11 @@ class DatabaseManager:
     def create_tables(self):
         """
         Create tables 'pages' and 'links' if they do not exist in the database.
+
+        For databases created before Wave 1, the additive columns introduced
+        for content refresh (``content_hash``, ``fetched_at``) and crawl bounds
+        (``depth``) are added via a guarded migration so existing user caches
+        keep working without data loss.
         """
         with self.conn:
             logger.debug("Creating tables 'pages' and 'links' if they do not exist")
@@ -33,40 +64,105 @@ class DatabaseManager:
                 """CREATE TABLE IF NOT EXISTS pages (
                           url TEXT PRIMARY KEY,
                           content TEXT,
-                          metadata TEXT)"""
+                          metadata TEXT,
+                          content_hash TEXT,
+                          fetched_at TEXT)"""
             )
             self.conn.execute(
                 """CREATE TABLE IF NOT EXISTS links (
                           url TEXT PRIMARY KEY,
-                          visited BOOLEAN)"""
+                          visited BOOLEAN,
+                          depth INTEGER DEFAULT 0)"""
             )
+            self._ensure_columns(
+                "pages",
+                {"content_hash": "content_hash TEXT", "fetched_at": "fetched_at TEXT"},
+            )
+            self._ensure_columns("links", {"depth": "depth INTEGER DEFAULT 0"})
+
+    def _ensure_columns(self, table, columns):
+        """
+        Ensure that ``table`` contains every column in ``columns``.
+
+        Missing columns are added with ``ALTER TABLE ... ADD COLUMN``. This is
+        the safe, additive migration path for SQLite, which cannot add multiple
+        columns in a single statement and offers no ``IF NOT EXISTS`` clause.
+
+        Args:
+            table (str): Name of the table to migrate. Must be a trusted,
+                hard-coded identifier (never user input).
+            columns (dict[str, str]): Mapping of column name to the column
+                definition fragment used in the ``ADD COLUMN`` statement.
+        """
+        existing = {row[1] for row in self.conn.execute(f"PRAGMA table_info({table})")}
+        for name, definition in columns.items():
+            if name not in existing:
+                logger.debug("Adding column %s to table %s", name, table)
+                self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
 
     def insert_page(self, url, content, metadata):
         """
-        Insert a new page into the 'pages' table.
+        Insert or refresh a page in the 'pages' table.
+
+        Performs an upsert keyed on ``url``: a new page is inserted, while an
+        existing page only has its ``content``/``metadata`` rewritten when the
+        SHA-256 hash of ``content`` differs from the stored hash. The
+        ``fetched_at`` timestamp is always refreshed so callers can tell when a
+        page was last seen, even if its content was unchanged.
 
         Args:
-        url (str): The URL of the page.
-        content (str): The content of the page.
-        metadata (str): The metadata of the page.
-        """
-        with self.conn:
-            logger.debug(f"Inserting a new page with URL: {url}")
-            self.conn.execute(
-                "INSERT OR IGNORE INTO pages (url, content, metadata) VALUES (?, ?, ?)",
-                (url, content, metadata),
-            )
+            url (str): The URL of the page.
+            content (str | None): The content of the page.
+            metadata (str): The metadata of the page (JSON-encoded string).
 
-    def insert_link(self, url, visited=False):
+        Returns:
+            bool: ``True`` if the content was inserted or changed, ``False`` if
+            the page already existed with identical content (only
+            ``fetched_at`` refreshed).
+        """
+        content_hash = _content_hash(content)
+        fetched_at = _utcnow_iso()
+        with self.conn:
+            cur = self.conn.execute(
+                "SELECT content_hash FROM pages WHERE url = ?", (url,)
+            )
+            row = cur.fetchone()
+            changed = row is None or row[0] != content_hash
+            logger.debug(
+                "Upserting page %s (changed=%s)", url, changed
+            )
+            self.conn.execute(
+                """
+                INSERT INTO pages (url, content, metadata, content_hash, fetched_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(url) DO UPDATE SET
+                    content = CASE
+                        WHEN pages.content_hash IS NOT excluded.content_hash
+                        THEN excluded.content ELSE pages.content END,
+                    metadata = CASE
+                        WHEN pages.content_hash IS NOT excluded.content_hash
+                        THEN excluded.metadata ELSE pages.metadata END,
+                    content_hash = excluded.content_hash,
+                    fetched_at = excluded.fetched_at
+                """,
+                (url, content, metadata, content_hash, fetched_at),
+            )
+            return changed
+
+    def insert_link(self, url, visited=False, depth=0):
         """
         Insert a new link into the 'links' table if it does not exist.
 
         Args:
-        url (str | List[str]): The URL or list of URLs of the link(s).
-        visited (bool): The status of the link (default is False).
+            url (str | List[str]): The URL or list of URLs of the link(s).
+            visited (bool): The status of the link (default is False).
+            depth (int): Crawl depth of the link(s) relative to the seed URLs
+                (seeds are depth 0, links discovered on them depth 1, ...).
+                Defaults to ``0``.
 
         Returns:
-        bool: True if the link is inserted, False if it already exists.
+            bool: True if at least one link is inserted, False if all already
+            exist.
         """
         if isinstance(url, str):
             urls = [url]
@@ -80,8 +176,9 @@ class DatabaseManager:
             for link in urls:
                 logger.debug(f"Inserting a new link with URL: {link}")
                 cur = self.conn.execute(
-                    "INSERT OR IGNORE INTO links (url, visited) VALUES (?, ?)",
-                    (link, visited),
+                    "INSERT OR IGNORE INTO links (url, visited, depth) "
+                    "VALUES (?, ?, ?)",
+                    (link, visited, depth),
                 )
                 if cur.rowcount > 0:
                     count += 1
@@ -101,14 +198,19 @@ class DatabaseManager:
 
     def get_unvisited_links(self):
         """
-        Retrieve all unvisited links from the 'links' table.
+        Retrieve all unvisited links from the 'links' table, shallowest first.
 
         Returns:
-        list: List of unvisited links.
+            list[tuple[str, int]]: List of ``(url, depth)`` tuples for every
+            unvisited link, ordered by ascending depth so the crawl proceeds
+            breadth-first.
         """
         with self.conn:
             logger.debug("Retrieving all unvisited links")
-            cursor = self.conn.execute("SELECT url FROM links WHERE visited = FALSE")
+            cursor = self.conn.execute(
+                "SELECT url, depth FROM links WHERE visited = FALSE "
+                "ORDER BY depth ASC"
+            )
             return cursor.fetchall()
 
     def get_links_count(self):
@@ -148,6 +250,25 @@ class DatabaseManager:
             logger.debug("Retrieving all pages")
             cursor = self.conn.execute("SELECT url, content, metadata FROM pages")
             return cursor.fetchall()
+
+    def get_page(self, url):
+        """
+        Retrieve a single page row by URL.
+
+        Args:
+            url (str): The URL of the page to fetch.
+
+        Returns:
+            tuple | None: ``(url, content, metadata, content_hash, fetched_at)``
+            if the page exists, otherwise ``None``.
+        """
+        with self.conn:
+            cursor = self.conn.execute(
+                "SELECT url, content, metadata, content_hash, fetched_at "
+                "FROM pages WHERE url = ?",
+                (url,),
+            )
+            return cursor.fetchone()
 
     def close(self):
         """
