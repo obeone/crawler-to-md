@@ -34,6 +34,7 @@ dependencies = [
     "coloredlogs==15.0.1",
     "beautifulsoup4==4.13.4",
     "argcomplete==3.6.2",
+    "tomli; python_version < '3.11'",
 ]
 
 [tool.setuptools_scm]
@@ -47,6 +48,7 @@ readability = ["trafilatura"]
 render = ["playwright"]
 rag = ["tiktoken"]
 vector = ["pyarrow"]
+mcp = ["mcp"]
 
 # Entry points for command-line interface scripts
 [project.scripts]
