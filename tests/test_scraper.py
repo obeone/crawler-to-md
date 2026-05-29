@@ -15,7 +15,7 @@ class DummyDB(DatabaseManager):
     def __del__(self):
         pass
 
-    def insert_link(self, url, visited=False):
+    def insert_link(self, url, visited=False, depth=0):
         return True
 
     def get_unvisited_links(self):
@@ -194,7 +194,7 @@ class ListDB(DummyDB):
         self.visited = set()
         self.pages = []
 
-    def insert_link(self, url, visited=False):
+    def insert_link(self, url, visited=False, depth=0):
         urls = url if isinstance(url, list) else [url]
         inserted = False
         for u in urls:
@@ -434,6 +434,7 @@ def test_start_scraping_survives_request_exception(monkeypatch):
         exclude_patterns=[],
         include_url_patterns=[],
         db_manager=db,
+        max_retries=0,
     )
 
     def boom(url, **kwargs):
@@ -467,3 +468,191 @@ def test_start_scraping_survives_request_exception(monkeypatch):
     assert ('http://example.com/page',) not in db.get_unvisited_links()
     assert db.get_visited_links_count() == 1
     assert db.pages == []
+
+
+class FakeResp:
+    """Minimal stand-in for ``requests.Response`` used in retry tests."""
+
+    def __init__(self, status_code, text='', headers=None):
+        self.status_code = status_code
+        self.text = text
+        self.headers = headers or {'content-type': 'text/html'}
+
+
+def _make_scraper(db, **kwargs):
+    """Build a Scraper with sensible test defaults."""
+    params = dict(
+        base_url='http://example.com',
+        exclude_patterns=[],
+        include_url_patterns=[],
+        db_manager=db,
+    )
+    params.update(kwargs)
+    return Scraper(**params)
+
+
+def test_get_with_retry_succeeds_after_429(monkeypatch):
+    """A 429 followed by a 200 should retry once and return the success."""
+    db = DummyDB()
+    scraper = _make_scraper(db, max_retries=3)
+
+    responses = [FakeResp(429), FakeResp(200, text='ok')]
+    calls = {'i': 0}
+
+    def fake_get(url, **kwargs):
+        resp = responses[calls['i']]
+        calls['i'] += 1
+        return resp
+
+    slept = []
+    monkeypatch.setattr(scraper.session, 'get', fake_get)
+    monkeypatch.setattr('crawler_to_md.scraper.time.sleep', lambda s: slept.append(s))
+
+    response = scraper._get_with_retry('http://example.com')
+
+    assert response.status_code == 200
+    assert calls['i'] == 2  # exactly one retry
+    assert len(slept) == 1  # one backoff slept between attempts
+
+
+def test_start_scraping_retries_429_then_scrapes(monkeypatch):
+    """The crawl loop scrapes a page once a 429 clears, not skipping it."""
+    db = ListDB()
+    scraper = _make_scraper(db, max_retries=3)
+
+    responses = [FakeResp(429), FakeResp(200, text='<html></html>')]
+    calls = {'i': 0}
+
+    def fake_get(url, **kwargs):
+        resp = responses[min(calls['i'], len(responses) - 1)]
+        calls['i'] += 1
+        return resp
+
+    monkeypatch.setattr(scraper.session, 'get', fake_get)
+    monkeypatch.setattr('crawler_to_md.scraper.time.sleep', lambda s: None)
+    monkeypatch.setattr(Scraper, 'fetch_links', lambda self, url, html=None: set())
+    monkeypatch.setattr(
+        Scraper, 'scrape_page', lambda self, html, url: ('# MD', {'url': url})
+    )
+
+    scraper.start_scraping(url='http://example.com/page')
+
+    # The page was eventually scraped (not skipped because of the initial 429).
+    assert db.pages and db.pages[0][0] == 'http://example.com/page'
+    assert db.get_visited_links_count() == 1
+
+
+def test_retry_after_header_respected(monkeypatch):
+    """A numeric Retry-After header dictates the backoff sleep duration."""
+    db = DummyDB()
+    scraper = _make_scraper(db, max_retries=2)
+
+    responses = [
+        FakeResp(503, headers={'content-type': 'text/html', 'Retry-After': '7'}),
+        FakeResp(200, text='ok'),
+    ]
+    calls = {'i': 0}
+
+    def fake_get(url, **kwargs):
+        resp = responses[calls['i']]
+        calls['i'] += 1
+        return resp
+
+    slept = []
+    monkeypatch.setattr(scraper.session, 'get', fake_get)
+    monkeypatch.setattr('crawler_to_md.scraper.time.sleep', lambda s: slept.append(s))
+
+    response = scraper._get_with_retry('http://example.com')
+
+    assert response.status_code == 200
+    assert slept == [7.0]
+
+
+def test_timeout_passed_through(monkeypatch):
+    """The configured timeout is forwarded to every session.get call."""
+    db = DummyDB()
+    scraper = _make_scraper(db, timeout=42)
+
+    captured = {}
+
+    def fake_get(url, **kwargs):
+        captured.update(kwargs)
+        return FakeResp(200, text='ok')
+
+    monkeypatch.setattr(scraper.session, 'get', fake_get)
+    scraper._get_with_retry('http://example.com')
+
+    assert captured.get('timeout') == 42
+
+
+def test_max_pages_enforced(monkeypatch):
+    """No more than max_pages pages are scraped even when more are discovered."""
+    db = DatabaseManager(':memory:')
+    scraper = _make_scraper(db, max_pages=2)
+
+    html = (
+        '<html><body>'
+        '<a href="/p1">1</a><a href="/p2">2</a>'
+        '<a href="/p3">3</a><a href="/p4">4</a>'
+        '</body></html>'
+    )
+    monkeypatch.setattr(
+        scraper.session, 'get', lambda url, **k: FakeResp(200, text=html)
+    )
+    monkeypatch.setattr(
+        Scraper, 'scrape_page', lambda self, html, url: ('# MD', {'url': url})
+    )
+
+    scraper.start_scraping(url='http://example.com')
+
+    assert len(db.get_all_pages()) == 2
+
+
+def test_max_depth_limits_discovery(monkeypatch):
+    """max_depth=0 crawls only seeds; max_depth=1 discovers one level."""
+    html = '<html><body><a href="/child">c</a></body></html>'
+
+    db0 = DatabaseManager(':memory:')
+    scraper0 = _make_scraper(db0, max_depth=0)
+    monkeypatch.setattr(
+        scraper0.session, 'get', lambda url, **k: FakeResp(200, text=html)
+    )
+    monkeypatch.setattr(
+        Scraper, 'scrape_page', lambda self, html, url: ('# MD', {'url': url})
+    )
+    scraper0.start_scraping(url='http://example.com')
+    # Only the seed is ever inserted; the child is never discovered.
+    assert db0.get_links_count() == 1
+
+    db1 = DatabaseManager(':memory:')
+    scraper1 = _make_scraper(db1, max_depth=1)
+    monkeypatch.setattr(
+        scraper1.session, 'get', lambda url, **k: FakeResp(200, text=html)
+    )
+    scraper1.start_scraping(url='http://example.com')
+    # Seed (depth 0) plus its one discovered child (depth 1).
+    assert db1.get_links_count() == 2
+
+
+def test_max_time_stops_loop(monkeypatch):
+    """The crawl halts once max_time elapses, leaving discovered pages unscraped."""
+    db = DatabaseManager(':memory:')
+    scraper = _make_scraper(db, max_time=10)
+
+    html = '<html><body><a href="/p1">1</a><a href="/p2">2</a></body></html>'
+    monkeypatch.setattr(
+        scraper.session, 'get', lambda url, **k: FakeResp(200, text=html)
+    )
+    monkeypatch.setattr(
+        Scraper, 'scrape_page', lambda self, html, url: ('# MD', {'url': url})
+    )
+
+    # Fake monotonic-ish clock: start_time=0, crawl_start=0, first bound check
+    # 0 (under limit), second iteration's check 100 (over limit -> stop).
+    times = iter([0, 0, 0, 100])
+    monkeypatch.setattr('crawler_to_md.scraper.time.time', lambda: next(times, 100))
+
+    scraper.start_scraping(url='http://example.com')
+
+    # Only the seed page was scraped before the time bound tripped.
+    assert len(db.get_all_pages()) == 1
