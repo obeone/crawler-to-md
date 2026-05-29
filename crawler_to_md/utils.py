@@ -1,7 +1,95 @@
 import logging
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 logger = logging.getLogger(__name__)
+
+# Query parameters considered tracking noise and dropped during canonicalization.
+# ``utm_*`` parameters are handled separately via a prefix check.
+_TRACKING_PARAMS = frozenset(
+    {
+        "fbclid",
+        "gclid",
+        "gclsrc",
+        "dclid",
+        "msclkid",
+        "mc_eid",
+        "mc_cid",
+        "_hsenc",
+        "_hsmi",
+    }
+)
+
+# Default ports that are redundant for their scheme and therefore stripped.
+_DEFAULT_PORTS = {"http": "80", "https": "443"}
+
+
+def _is_tracking_param(key):
+    """
+    Determine whether a query-parameter key is a tracking parameter.
+
+    Args:
+        key (str): The query-parameter name.
+
+    Returns:
+        bool: ``True`` if the key is a known tracking parameter (``utm_*`` or a
+        member of :data:`_TRACKING_PARAMS`), ``False`` otherwise.
+    """
+    lowered = key.lower()
+    return lowered.startswith("utm_") or lowered in _TRACKING_PARAMS
+
+
+def canonicalize_url(url):
+    """
+    Return a canonical form of ``url`` suitable for deduplicating equivalent URLs.
+
+    The following normalizations are applied without altering the semantic
+    target of the URL:
+
+    - lowercase the scheme and host (path and query values keep their case);
+    - strip the default port for the scheme (``80`` for HTTP, ``443`` for HTTPS);
+    - drop tracking query parameters (``utm_*``, ``fbclid``, ``gclid``, ...);
+    - sort the remaining query parameters for a stable ordering;
+    - remove the fragment;
+    - normalize an empty path to ``"/"``.
+
+    Args:
+        url (str): The URL to canonicalize.
+
+    Returns:
+        str: The canonicalized URL. Non-string input is returned unchanged.
+    """
+    if not isinstance(url, str):
+        return url
+
+    parsed = urlparse(url)
+    scheme = parsed.scheme.lower()
+
+    # Split userinfo and host:port so only the host is lowercased.
+    netloc = parsed.netloc
+    userinfo = ""
+    hostport = netloc
+    if "@" in netloc:
+        userinfo, hostport = netloc.rsplit("@", 1)
+        userinfo += "@"
+    if ":" in hostport:
+        host, _, port = hostport.partition(":")
+    else:
+        host, port = hostport, ""
+    host = host.lower()
+    if port and _DEFAULT_PORTS.get(scheme) == port:
+        port = ""
+    netloc = f"{userinfo}{host}:{port}" if port else f"{userinfo}{host}"
+
+    # Normalize an empty path so "http://host" and "http://host/" collapse.
+    path = parsed.path or "/"
+
+    # Drop tracking parameters and sort the remainder for stability.
+    pairs = parse_qsl(parsed.query, keep_blank_values=True)
+    filtered = [(k, v) for k, v in pairs if not _is_tracking_param(k)]
+    filtered.sort()
+    query = urlencode(filtered)
+
+    return urlunparse((scheme, netloc, path, parsed.params, query, ""))
 
 
 def randomstring_to_filename(random_string):
