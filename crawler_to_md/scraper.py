@@ -1,3 +1,4 @@
+import asyncio
 import copy
 import json
 import logging
@@ -9,6 +10,7 @@ from datetime import datetime
 from email.utils import parsedate_to_datetime
 from urllib.parse import urldefrag, urljoin
 
+import httpx
 import requests
 from bs4 import BeautifulSoup, Tag
 from markitdown import MarkItDown
@@ -44,6 +46,7 @@ class Scraper:
         max_pages=0,
         max_depth=-1,
         max_time=0,
+        concurrency=1,
     ):
         """
         Initialize the Scraper object and log the initialization process.
@@ -72,6 +75,9 @@ class Scraper:
                 ``-1`` means unlimited. Seeds are depth 0. Defaults to ``-1``.
             max_time (float, optional): Maximum wall-clock time for the crawl in
                 seconds; ``0`` means unlimited. Defaults to ``0``.
+            concurrency (int, optional): Number of concurrent fetches for the
+                async crawl path. ``1`` (the default) behaves exactly like the
+                synchronous path; values greater than ``1`` fetch in parallel.
 
         Raises:
             ValueError: If a proxy is provided but unreachable.
@@ -88,6 +94,7 @@ class Scraper:
         self.max_pages = max_pages
         self.max_depth = max_depth
         self.max_time = max_time
+        self.concurrency = max(1, concurrency)
         self.session = requests.Session()
         if proxy:
             self.session.proxies.update({"http": proxy, "https": proxy})
@@ -564,3 +571,282 @@ class Scraper:
 
         # Close the progress bar upon completion of the scraping process
         pbar.close()
+
+    def _make_async_client(self):
+        """
+        Create the ``httpx.AsyncClient`` used by the async crawl path.
+
+        Centralized so tests can monkeypatch it to inject a mock transport.
+        ``follow_redirects=True`` mirrors the redirect-following behavior of the
+        synchronous ``requests`` session.
+
+        Returns:
+            httpx.AsyncClient: A configured async HTTP client.
+        """
+        return httpx.AsyncClient(
+            timeout=self.timeout,
+            follow_redirects=True,
+            proxy=self.proxy,
+        )
+
+    async def _aget_with_retry(self, client, url):
+        """
+        Async counterpart of :meth:`_get_with_retry`, mirroring its contract.
+
+        Retries on transient httpx transport errors and retryable HTTP statuses
+        (429 and 5xx, see :data:`_RETRYABLE_STATUS`) using exponential backoff
+        with jitter, honoring the ``Retry-After`` header. The link is *not*
+        marked visited here.
+
+        Args:
+            client (httpx.AsyncClient): The client used to issue the request.
+            url (str): The URL to fetch.
+
+        Returns:
+            httpx.Response | None: The final response. If every attempt failed
+            with a retryable status, the last response is returned.
+
+        Raises:
+            httpx.RequestError: If a transport error persists after the final
+            attempt.
+        """
+        last_response = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = await client.get(url)
+            except httpx.RequestError as exc:
+                if attempt >= self.max_retries:
+                    logger.warning(
+                        "Giving up on %s after %d attempt(s): %s",
+                        url,
+                        attempt + 1,
+                        exc,
+                    )
+                    raise
+                wait = self._backoff_delay(attempt)
+                logger.debug(
+                    "Connection error for %s (attempt %d/%d): %s; retrying in "
+                    "%.2fs",
+                    url,
+                    attempt + 1,
+                    self.max_retries + 1,
+                    exc,
+                    wait,
+                )
+                await asyncio.sleep(wait)
+                continue
+
+            if response.status_code in _RETRYABLE_STATUS and attempt < self.max_retries:
+                wait = self._retry_after(response)
+                if wait is None:
+                    wait = self._backoff_delay(attempt)
+                logger.debug(
+                    "Retryable status %d for %s (attempt %d/%d); retrying in "
+                    "%.2fs",
+                    response.status_code,
+                    url,
+                    attempt + 1,
+                    self.max_retries + 1,
+                    wait,
+                )
+                last_response = response
+                await asyncio.sleep(wait)
+                continue
+
+            return response
+
+        return last_response
+
+    async def _afetch_one(self, client, url, semaphore):
+        """
+        Fetch a single URL within the concurrency semaphore.
+
+        Honors the configured ``delay`` between requests for politeness. Any
+        persistent transport error is captured and returned rather than raised
+        so a single failure cannot abort the whole batch.
+
+        Args:
+            client (httpx.AsyncClient): The async client.
+            url (str): The URL to fetch.
+            semaphore (asyncio.Semaphore): Bounds the number of in-flight fetches.
+
+        Returns:
+            tuple[str, httpx.Response | None, Exception | None]: ``(url,
+            response, error)`` where exactly one of ``response``/``error`` is set
+            on failure (``error`` set, ``response`` ``None``).
+        """
+        async with semaphore:
+            if self.delay > 0:
+                await asyncio.sleep(self.delay)
+            try:
+                response = await self._aget_with_retry(client, url)
+                return (url, response, None)
+            except httpx.RequestError as exc:
+                return (url, None, exc)
+
+    async def start_scraping_async(self, url=None, urls_list=None):
+        """
+        Asynchronous crawl that fetches concurrently while serializing DB access.
+
+        Behaviorally mirrors :meth:`start_scraping`: identical seeding, canonical
+        dedup, content-type filtering, retry/backoff, crawl bounds
+        (``max_pages``/``max_depth``/``max_time``), rate limiting/delay, and
+        upsert/visited semantics. The frontier is processed in
+        ``concurrency``-sized batches: a batch of the shallowest unvisited links
+        is fetched concurrently, then *every* database read/write is applied
+        serially in this single coroutine so the SQLite connection is never used
+        concurrently. With ``concurrency == 1`` this is equivalent to the
+        synchronous path.
+
+        Args:
+            url (str, optional): A single URL to start scraping from.
+            urls_list (list, optional): A list of URLs to scrape.
+        """
+        # Seed the frontier (serial DB access).
+        urls = urls_list or []
+        if urls:
+            validated_urls = []
+            for url_item in urls:
+                if not self.is_valid_link(url_item):
+                    logger.warning(f"Skipping invalid URL: {url_item}")
+                    continue
+                validated_urls.append(utils.canonicalize_url(url_item))
+            self.db_manager.insert_link(validated_urls, depth=0)
+        elif url:
+            self.db_manager.insert_link(utils.canonicalize_url(url), depth=0)
+
+        logger.info(
+            "Starting async scraping process (concurrency=%d)", self.concurrency
+        )
+
+        pbar = tqdm(
+            total=self.db_manager.get_links_count(),
+            initial=self.db_manager.get_visited_links_count(),
+            desc="Scraping",
+            unit="link",
+        )
+
+        # Rate-limit and crawl-bound tracking state.
+        request_count = 0
+        start_time = time.time()
+        crawl_start = time.time()
+        scraped_count = 0
+        stop = False
+
+        semaphore = asyncio.Semaphore(self.concurrency)
+        client = self._make_async_client()
+        try:
+            async with client:
+                while not stop:
+                    # Serial DB read of the current frontier (BFS order).
+                    unvisited_links = self.db_manager.get_unvisited_links()
+                    if not unvisited_links:
+                        logger.info("No more links to visit. Exiting.")
+                        break
+
+                    # Time bound: check before scheduling a new batch.
+                    if (
+                        self.max_time > 0
+                        and (time.time() - crawl_start) >= self.max_time
+                    ):
+                        logger.info(
+                            "Reached max time (%.0fs). Stopping crawl.",
+                            self.max_time,
+                        )
+                        break
+
+                    # Rate limit: enforce the per-minute window before a batch.
+                    if self.rate_limit > 0 and request_count >= self.rate_limit:
+                        elapsed = time.time() - start_time
+                        sleep_time = 60 - elapsed
+                        if sleep_time > 0:
+                            logger.debug(
+                                "Rate limit reached, sleeping for %s seconds",
+                                sleep_time,
+                            )
+                            await asyncio.sleep(sleep_time)
+                        request_count = 0
+                        start_time = time.time()
+
+                    # Take a concurrency-sized batch of the shallowest links.
+                    batch = unvisited_links[: self.concurrency]
+                    depth_by_url = {
+                        link[0]: (link[1] if len(link) > 1 else 0) for link in batch
+                    }
+
+                    # Fetch the batch concurrently (DB untouched here).
+                    results = await asyncio.gather(
+                        *(
+                            self._afetch_one(client, link[0], semaphore)
+                            for link in batch
+                        )
+                    )
+                    request_count += len(results)
+
+                    # Apply every database update serially in this coroutine.
+                    for fetched_url, response, error in results:
+                        pbar.update(1)
+                        depth = depth_by_url.get(fetched_url, 0)
+
+                        # Page bound: stop once enough pages have been scraped.
+                        if self.max_pages > 0 and scraped_count >= self.max_pages:
+                            logger.info(
+                                "Reached max pages (%d). Stopping crawl.",
+                                self.max_pages,
+                            )
+                            stop = True
+                            break
+
+                        # Persistent transport error: mark visited and move on.
+                        if error is not None:
+                            logger.warning(
+                                "Failed to fetch %s: %s", fetched_url, error
+                            )
+                            self.db_manager.mark_link_visited(fetched_url)
+                            continue
+
+                        # Skip non-200 / non-HTML responses (retries exhausted).
+                        if (
+                            response is None
+                            or response.status_code != 200
+                            or not response.headers.get(
+                                "content-type", ""
+                            ).startswith("text/html")
+                        ):
+                            self.db_manager.mark_link_visited(fetched_url)
+                            logger.info(
+                                "Skipping link %s due to invalid status code or "
+                                "content type",
+                                fetched_url,
+                            )
+                            continue
+
+                        html = response.text
+                        content, metadata = self.scrape_page(html, fetched_url)
+                        self.db_manager.insert_page(
+                            fetched_url, content, json.dumps(metadata)
+                        )
+                        scraped_count += 1
+
+                        # Discover new links while within the depth bound.
+                        discover = self.max_depth < 0 or depth < self.max_depth
+                        if not urls_list and discover:
+                            new_links = self.fetch_links(html=html, url=fetched_url)
+                            real_new_links_count = 0
+                            for new_url in new_links:
+                                canonical = utils.canonicalize_url(new_url)
+                                if self.db_manager.insert_link(
+                                    canonical, depth=depth + 1
+                                ):
+                                    real_new_links_count += 1
+                                    logger.debug(
+                                        "Inserted new link %s into the database",
+                                        canonical,
+                                    )
+                            if real_new_links_count:
+                                pbar.total += real_new_links_count
+                                pbar.refresh()
+
+                        self.db_manager.mark_link_visited(fetched_url)
+        finally:
+            pbar.close()
