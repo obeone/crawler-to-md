@@ -4,6 +4,7 @@ import os
 
 from . import rag
 from .database_manager import DatabaseManager
+from .plugins import get_registry
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,34 @@ class ExportManager:
         self.db_manager = db_manager
         self.title = title
         logger.info("ExportManager initialized.")  # Add log message
+
+    def export_with(self, formatter_name, output_path, **options):
+        """
+        Run a registered formatter by name through the plugin registry.
+
+        This re-expresses every export as a discoverable
+        :class:`~crawler_to_md.plugins.Formatter`. First-party formatters
+        delegate to the corresponding ``export_to_*`` method, so the output is
+        byte-identical to calling that method directly; third-party formatters
+        registered via the ``crawler_to_md.formatters`` entry-point group are
+        equally usable here.
+
+        Args:
+            formatter_name (str): Registered formatter name (e.g. ``"markdown"``,
+                ``"json"``, ``"jsonl"``, ``"llms"``, ``"individual"``,
+                ``"chunks"``, ``"vectors"``).
+            output_path (str): Destination path or folder for the formatter.
+            **options: Formatter-specific options (e.g. ``base_url``,
+                ``frontmatter``, ``chunk_size``, ``chunk_overlap``).
+
+        Returns:
+            Any: Whatever the underlying formatter returns.
+
+        Raises:
+            KeyError: If no formatter is registered under ``formatter_name``.
+        """
+        formatter = get_registry().create("formatters", formatter_name)
+        return formatter.export(self, output_path, **options)
 
     def _adjust_headers(self, content, level_increment=1):
         """
