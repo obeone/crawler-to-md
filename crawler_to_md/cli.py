@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 import logging
 import os
 import sys
@@ -179,6 +180,12 @@ def main():
         help="Maximum wall-clock crawl time in seconds (0 = unlimited)",
         default=0,
     )
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        help="Number of concurrent fetches (1 = synchronous, the default)",
+        default=1,
+    )
 
     try:
         import argcomplete
@@ -268,14 +275,21 @@ def main():
             max_pages=args.max_pages,
             max_depth=args.max_depth,
             max_time=args.max_time,
+            concurrency=args.concurrency,
         )
     except ValueError as exc:
         parser.error(str(exc))
     logger.info("Scraper initialized.")
 
-    # Start the scraping process
+    # Start the scraping process. Concurrency > 1 selects the async crawl
+    # engine; 1 (the default) uses the synchronous path for identical behavior.
     logger.info(f"Starting the scraping process for URL: {args.url}")
-    scraper.start_scraping(url=args.url, urls_list=urls_list)
+    if args.concurrency > 1:
+        asyncio.run(
+            scraper.start_scraping_async(url=args.url, urls_list=urls_list)
+        )
+    else:
+        scraper.start_scraping(url=args.url, urls_list=urls_list)
 
     output_name = utils.randomstring_to_filename(args.title)
 
