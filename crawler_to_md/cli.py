@@ -149,6 +149,36 @@ def main():
         ),
         default=[],
     )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        help="Per-request timeout in seconds",
+        default=15,
+    )
+    parser.add_argument(
+        "--max-retries",
+        type=int,
+        help="Maximum retries on transient failures (timeouts, 429, 5xx)",
+        default=3,
+    )
+    parser.add_argument(
+        "--max-pages",
+        type=int,
+        help="Maximum number of pages to scrape (0 = unlimited)",
+        default=0,
+    )
+    parser.add_argument(
+        "--max-depth",
+        type=int,
+        help="Maximum crawl depth for link discovery (-1 = unlimited)",
+        default=-1,
+    )
+    parser.add_argument(
+        "--max-time",
+        type=float,
+        help="Maximum wall-clock crawl time in seconds (0 = unlimited)",
+        default=0,
+    )
 
     try:
         import argcomplete
@@ -233,6 +263,11 @@ def main():
             proxy=args.proxy,
             include_filters=args.include,
             exclude_filters=args.exclude,
+            timeout=args.timeout,
+            max_retries=args.max_retries,
+            max_pages=args.max_pages,
+            max_depth=args.max_depth,
+            max_time=args.max_time,
         )
     except ValueError as exc:
         parser.error(str(exc))
