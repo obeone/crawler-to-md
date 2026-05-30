@@ -28,11 +28,13 @@ dependencies = [
     "mdformat_frontmatter==2.0.8",
     "mdformat_tables==1.0.0",
     "requests[socks]==2.32.4",
+    "httpx>=0.27",
     "tqdm==4.67.1",
     "markitdown==0.1.2",
     "coloredlogs==15.0.1",
     "beautifulsoup4==4.13.4",
     "argcomplete==3.6.2",
+    "tomli; python_version < '3.11'",
 ]
 
 [tool.setuptools_scm]
@@ -40,13 +42,37 @@ version_scheme = "post-release"
 local_scheme   = "no-local-version"
 
 # Optional dependencies for additional features or development
-# Uncomment and customize as needed
-# [project.optional-dependencies]
-# dev = ["pytest", "ruff"]
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "pytest-cov"]
+readability = ["trafilatura"]
+render = ["playwright"]
+rag = ["tiktoken"]
+vector = ["pyarrow"]
+mcp = ["mcp"]
 
 # Entry points for command-line interface scripts
 [project.scripts]
 crawler-to-md = "crawler_to_md.cli:main"
+
+# First-party pipeline plugins, discovered via the plugin registry. Third
+# parties register additional plugins under the same groups.
+[project.entry-points."crawler_to_md.formatters"]
+markdown = "crawler_to_md.plugins:MarkdownFormatter"
+json = "crawler_to_md.plugins:JsonFormatter"
+jsonl = "crawler_to_md.plugins:JsonlFormatter"
+llms = "crawler_to_md.plugins:LlmsFormatter"
+individual = "crawler_to_md.plugins:IndividualMarkdownFormatter"
+chunks = "crawler_to_md.plugins:ChunksFormatter"
+vectors = "crawler_to_md.plugins:VectorsFormatter"
+
+[project.entry-points."crawler_to_md.filters"]
+url-pattern = "crawler_to_md.plugins:UrlPatternFilter"
+
+[project.entry-points."crawler_to_md.processors"]
+noop = "crawler_to_md.plugins:NoOpProcessor"
+
+[project.entry-points."crawler_to_md.fetchers"]
+requests = "crawler_to_md.plugins:RequestsFetcher"
 
 # URLs related to the project repository and issue tracker
 [project.urls]

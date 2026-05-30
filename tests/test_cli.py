@@ -65,6 +65,7 @@ def test_cli_proxy_option(monkeypatch, tmp_path):
         proxy=None,
         include_filters=None,
         exclude_filters=None,
+        **kwargs,
     ):
         """
         Fake initializer to capture proxy argument.
@@ -110,6 +111,7 @@ def test_cli_proxy_short_option(monkeypatch, tmp_path):
         proxy=None,
         include_filters=None,
         exclude_filters=None,
+        **kwargs,
     ):
         """
         Fake initializer to capture proxy argument.
@@ -155,6 +157,7 @@ def test_cli_socks_proxy(monkeypatch, tmp_path):
         proxy=None,
         include_filters=None,
         exclude_filters=None,
+        **kwargs,
     ):
         """
         Fake initializer to capture proxy argument.
@@ -229,6 +232,7 @@ def test_cli_include_exclude_options(monkeypatch, tmp_path):
         proxy=None,
         include_filters=None,
         exclude_filters=None,
+        **kwargs,
     ):
         """
         Fake initializer to capture include/exclude arguments.
@@ -286,6 +290,7 @@ def test_cli_include_exclude_short_options(monkeypatch, tmp_path):
         proxy=None,
         include_filters=None,
         exclude_filters=None,
+        **kwargs,
     ):
         """
         Capture include and exclude selectors from short options.
@@ -343,6 +348,7 @@ def test_cli_include_url_option(monkeypatch, tmp_path):
         proxy=None,
         include_filters=None,
         exclude_filters=None,
+        **kwargs,
     ):
         """
         Capture include URL patterns argument.
@@ -380,6 +386,7 @@ def test_cli_overwrite_cache(monkeypatch, tmp_path):
     def fake_init(self, db_path):
         captured['exists'] = os.path.exists(db_path)
         self.conn = sqlite3.connect(':memory:')
+        self.create_tables()
 
     monkeypatch.setattr(DatabaseManager, '__init__', fake_init)
     monkeypatch.setattr(ExportManager, 'export_to_markdown', lambda *a, **k: None)
@@ -413,6 +420,7 @@ def test_cli_overwrite_cache_short_option(monkeypatch, tmp_path):
     def fake_init(self, db_path):
         captured['exists'] = os.path.exists(db_path)
         self.conn = sqlite3.connect(':memory:')
+        self.create_tables()
 
     monkeypatch.setattr(DatabaseManager, '__init__', fake_init)
     monkeypatch.setattr(ExportManager, 'export_to_markdown', lambda *a, **k: None)

@@ -1,14 +1,27 @@
-/old
-/old2
-/.venv
-/.history
+# Dead weight / legacy
+old/
+old2/
+.history/
+
+# Editor / IDE
 /.vscode
-/cache
-/output
-__pycache__
 .cursorignore
-/test.py
-.aider*
+
+# Python
+__pycache__/
+*.pyc
 *.egg-info
 .pytest_cache
 .ruff_cache
+.venv/
+
+# Tooling / caches
+.codegraph/
+.aider*
+
+# Runtime artifacts
+cache/
+output/
+*.sqlite
+.DS_Store
+/test.py

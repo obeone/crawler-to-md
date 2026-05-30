@@ -97,6 +97,50 @@ def test_concatenate_skips_none_content():
     assert 'URL: http://b' in content
 
 
+def test_concatenate_markdown_multipage_single_cleanup():
+    """
+    Multi-page concatenation must run ``_cleanup_markdown`` exactly once.
+
+    The cleanup pass previously ran inside the per-page loop (O(n^2)); it now
+    runs a single time after the loop. This test asserts both that the cleanup
+    is invoked exactly once regardless of page count and that the resulting
+    document is correct (no runs of 3+ newlines, all pages present and ordered).
+    """
+    db = DatabaseManager(':memory:')
+    # Content with deliberate excessive blank lines to exercise cleanup.
+    db.insert_page('http://a', '# A\n\n\n\nAlpha', json.dumps({'k': 'va'}))
+    db.insert_page('http://b', '# B\n\n\n\nBravo', json.dumps({'k': 'vb'}))
+    db.insert_page('http://c', '# C\n\n\n\nCharlie', json.dumps({'k': 'vc'}))
+    exporter = ExportManager(db, title='Head')
+
+    call_count = {'n': 0}
+    original_cleanup = exporter._cleanup_markdown
+
+    def counting_cleanup(content):
+        """Wrap the real cleanup to count how many times it runs."""
+        call_count['n'] += 1
+        return original_cleanup(content)
+
+    exporter._cleanup_markdown = counting_cleanup
+    result = exporter._concatenate_markdown(db.get_all_pages())
+
+    # Single cleanup pass, not one per page.
+    assert call_count['n'] == 1
+
+    # Output correctness: title, every page, no excessive newline runs.
+    assert result.startswith('# Head')
+    for url, marker in (
+        ('http://a', 'Alpha'),
+        ('http://b', 'Bravo'),
+        ('http://c', 'Charlie'),
+    ):
+        assert f'URL: {url}' in result
+        assert marker in result
+    assert '\n\n\n' not in result
+    # Pages preserved in insertion order.
+    assert result.index('Alpha') < result.index('Bravo') < result.index('Charlie')
+
+
 def test_export_to_json_skips_none(tmp_path):
     db = DatabaseManager(':memory:')
     db.insert_page('http://a', None, '{}')
