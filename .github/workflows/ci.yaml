@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+# Restrict the default GITHUB_TOKEN to read-only for the whole workflow
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Lint and test (Python ${{ matrix.python-version }})
