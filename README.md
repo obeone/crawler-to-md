@@ -1,98 +1,122 @@
 # crawler-to-md 🌐✍️
 
-This Python-based web scraper fetches content from URLs and exports it into Markdown and JSON formats, specifically designed for simplicity, extensibility, and for uploading JSON files to GPT models. It is ideal for those looking to leverage web content for AI training or analysis. 🤖💡
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
+![CI](https://github.com/obeone/crawler-to-md/actions/workflows/ci.yaml/badge.svg)
+![PyPI](https://img.shields.io/pypi/v/crawler-to-md?logo=pypi&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Ready-blue?logo=docker&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
 
-## 🚀 Quick Start
+Crawl websites and turn them into clean Markdown, JSON and LLM-ready datasets —
+built to feed GPTs, RAG pipelines and AI agents.
 
-(Or even better, **[use Docker!](#-docker-support) 🐳**)
+---
 
-### Recommended installation using pipx (isolated environment)
+## 🏗 Architecture
+
+```mermaid
+flowchart TB
+    subgraph Interfaces
+        CLI["CLI<br/>crawl · export · mcp"]
+        LIB["Library API<br/>crawl() → CrawlResult"]
+        MCP["MCP server<br/>crawl · fetch_as_markdown"]
+    end
+
+    CORE["core<br/>run_crawl · run_export"]
+    CLI --> CORE
+    LIB --> CORE
+    MCP --> CORE
+
+    subgraph Engine
+        SCRAPER["Scraper<br/>sync + async (httpx)"]
+        INTEL["Intelligence<br/>robots · sitemap<br/>readability · render"]
+        SCRAPER -.-> INTEL
+    end
+    CORE --> SCRAPER
+
+    DB[("DatabaseManager<br/>SQLite frontier + pages")]
+    SCRAPER --> DB
+
+    subgraph Output
+        EXPORT["ExportManager"]
+        REG{{"Plugin registry<br/>entry points"}}
+        FMT["Formatters<br/>md · json · jsonl · llms<br/>individual · chunks · vectors"]
+        EXPORT --> REG --> FMT
+    end
+    DB --> EXPORT
+```
+
+The pipeline: **interface → core orchestration → Scraper (sync or async) →
+SQLite store → ExportManager + pluggable formatters**. Crawl-intelligence
+features wrap the fetch/scrape stage; output formats are discovered through an
+entry-point plugin registry.
+
+---
+
+## ✨ Features
+
+| Area | Highlights |
+|---|---|
+| 🕷 **Crawling** | Link-following crawler with SQLite frontier, base-URL filtering, include/exclude URL patterns, rate limiting, delay, proxy (HTTP/SOCKS) |
+| 🔁 **Robustness** | Automatic retries with exponential backoff + jitter (429/5xx/`Retry-After`), per-request timeouts, crawl bounds (`--max-pages/--max-depth/--max-time`), content-hash refresh |
+| ⚡ **Concurrency** | Async `httpx` engine with bounded parallelism (`--concurrency N`); sync path preserved and verified for parity |
+| 🧠 **Intelligence** | `robots.txt` compliance, sitemap seeding, boilerplate extraction (trafilatura), JS rendering (Playwright), custom headers/cookies/auth, non-HTML ingestion (PDF/docx via MarkItDown) |
+| 🧩 **HTML shaping** | Include/exclude page elements with CSS-like selectors (`#id`, `.class`, `tag`) before conversion |
+| 🤖 **AI-ready output** | Markdown, JSON, JSONL, `llms.txt`/`llms-full.txt`, YAML frontmatter, token-aware RAG chunks, Parquet vectors, end-of-run token accounting |
+| 🔌 **Interfaces** | CLI subcommands, embeddable `crawl()` library API, and an MCP server for AI agents |
+| 🔧 **Extensible** | Entry-point plugin system for formatters, filters, processors and fetchers |
+| 🐳 **Packaging** | Lightweight core, optional extras, multi-arch Docker image |
+
+---
+
+## 📦 Installation
+
+### With Docker (recommended)
+
+```shell
+docker run --rm \
+  -v "$(pwd)/output:/app/output" \
+  -v crawler-cache:/home/app/.cache/crawler-to-md \
+  ghcr.io/obeone/crawler-to-md --url https://example.com
+```
+
+### With pipx (isolated) or pip
 
 ```shell
 pipx install crawler-to-md
-```
-
-### Alternatively, install with pip
-
-```shell
+# or
 pip install crawler-to-md
 ```
 
-Then run the scraper:
-
 ```shell
-crawler-to-md --url https://www.example.com
+crawler-to-md --url https://example.com
 ```
 
-## 🌟 Features
-
-- Scrapes web pages for content and metadata. 📄
-- Filters links by base URL. 🔍
-- Excludes URLs containing certain strings. ❌
-- Automatically finds links or can use a file of URLs to scrape. 🔗
-- Rate limiting and delay support. 🕘
-- Exports data to Markdown and JSON, ready for GPT uploads. 📤
-- Exports each page as an individual Markdown file if `--export-individual` is used. 📝
-- Uses SQLite for efficient data management. 📊
-- Configurable via command-line arguments or a `crawler-to-md.toml` config file. ⚙️
-- Include or exclude specific HTML elements using CSS-like selectors (#id, .class, tag) during Markdown conversion. 🧩
-- **Robustness**: automatic retries with exponential backoff, configurable timeouts, crawl bounds. 🔁
-- **Concurrency**: async `httpx` engine for parallel fetching (`--concurrency N`). ⚡
-- **Crawl intelligence**: robots.txt compliance, sitemap seeding, boilerplate extraction, JS rendering. 🧠
-- **AI-ready outputs**: JSONL, llms.txt/llms-full.txt, YAML frontmatter, RAG chunks, Parquet vectors. 🤖
-- **MCP server**: expose crawl tools to AI agents via the Model Context Protocol. 🔌
-- **Library API**: use `from crawler_to_md import crawl` in your own code. 📦
-- **Plugin system**: extend formatters, filters, processors, and fetchers via Python entry points. 🔧
-- Docker support. 🐳
-
-## 📋 Requirements
-
-Python 3.10 or higher is required.
-
-Project dependencies are managed with `pyproject.toml`. Install the core package with:
-
-```shell
-pip install crawler-to-md
-```
+Python 3.10+ required.
 
 ### Optional extras
 
-Heavy or niche features ship as optional extras so the core stays lightweight:
+Heavy or niche features ship as extras so the core stays lightweight:
 
 | Extra | Install | Enables |
 |---|---|---|
 | `readability` | `pip install crawler-to-md[readability]` | Boilerplate extraction via trafilatura (`--extract readability`) |
-| `render` | `pip install crawler-to-md[render]` | JS rendering via Playwright (`--render`). After install run `playwright install chromium`. |
-| `rag` | `pip install crawler-to-md[rag]` | Token-aware RAG chunking via tiktoken (`--chunk-size`/`--chunk-overlap`); exact token counts in the run summary |
-| `vector` | `pip install crawler-to-md[vector]` | Parquet vector export via pyarrow (`--export-vectors`) |
+| `render` | `pip install crawler-to-md[render]` | JS rendering via Playwright (`--render`); then `playwright install chromium` |
+| `rag` | `pip install crawler-to-md[rag]` | Token-aware RAG chunking (`--chunk-size/--chunk-overlap`) + exact token counts |
+| `vector` | `pip install crawler-to-md[vector]` | Parquet vector export (`--export-vectors`) |
 | `mcp` | `pip install crawler-to-md[mcp]` | MCP server (`crawler-to-md mcp`) |
 | `dev` | `pip install crawler-to-md[dev]` | pytest, ruff, pytest-cov |
 
-Extras can be combined:
+Extras combine: `pip install "crawler-to-md[rag,vector,mcp]"`.
 
-```shell
-pip install crawler-to-md[rag,vector]
-pip install crawler-to-md[readability,render,mcp]
-```
+---
 
-## 🛠 Usage
+## ⚙️ Configuration
 
-### Subcommands
-
-crawler-to-md now uses subcommands. The legacy `crawler-to-md --url ...` invocation is fully preserved — when no subcommand is given the tool defaults to `crawl`.
-
-```shell
-crawler-to-md crawl   --url <URL> [options]   # crawl a site and export
-crawler-to-md export  --url <URL> [options]   # re-export from an existing cache (no re-crawl)
-crawler-to-md mcp                             # start the MCP server over stdio
-```
-
-### Config file
-
-Place a `crawler-to-md.toml` file in your working directory and it is discovered automatically. Pass `--config path/to/file.toml` to use a different location. CLI flags always override config file values.
+Drop a `crawler-to-md.toml` in your working directory (auto-discovered, or pass
+`--config path.toml`). CLI flags always override file values.
 
 ```toml
-# crawler-to-md.toml — example
+# crawler-to-md.toml
 url = "https://docs.example.com"
 output-folder = "./docs-export"
 concurrency = 4
@@ -102,120 +126,128 @@ chunk-size = 512
 chunk-overlap = 64
 ```
 
-### `crawl` — full option reference
+Logging verbosity is controlled by the `LOG_LEVEL` environment variable
+(default `WARN`):
 
 ```shell
-crawler-to-md crawl --url <URL> [--urls-file <FILE>] [options]
+LOG_LEVEL=INFO crawler-to-md --url https://example.com
 ```
 
-#### Input / output
+---
 
-- `--url`, `-u`: The starting URL. 🌍
-- `--urls-file`: Path to a file containing URLs to scrape, one URL per line. If `-`, read from stdin. 📁
-- `--output-folder`, `-o`: Where to save output files (default: `./output`). 📂
-- `--cache-folder`, `-c`: Where to store the SQLite database (default: `~/.cache/crawler-to-md`). 💾
-- `--base-url`, `-b`: Filter links by base URL (default: URL's base). 🔎
-- `--title`, `-t`: Title for the output files. Defaults to the URL. 🏷️
-- `--config`: Path to a `crawler-to-md.toml` config file. Auto-discovered in CWD when omitted. ⚙️
+## 🛠 Usage
 
-#### Crawl control
+crawler-to-md uses subcommands. The legacy `crawler-to-md --url ...` invocation
+is fully preserved — with no subcommand it defaults to `crawl`.
 
-- `--overwrite-cache`, `-w`: Overwrite existing cache database before scraping. 🧹
-- `--exclude-url`, `-e`: Exclude URLs containing this string (repeatable). ❌
-- `--include-url`, `-I`: Include only URLs containing this string (repeatable). ✅
-- `--rate-limit`, `-rl`: Maximum number of requests per minute (default: 0, no limit). ⏱️
-- `--delay`, `-d`: Delay between requests in seconds (default: 0). 🕒
-- `--proxy`, `-p`: Proxy URL for HTTP or SOCKS requests. 🌐
+| Command | Purpose |
+|---|---|
+| `crawler-to-md crawl --url <URL> [options]` | Crawl a site and export (default) |
+| `crawler-to-md export --url <URL> [options]` | Re-export from an existing cache, no re-crawl |
+| `crawler-to-md mcp` | Start the MCP server over stdio |
 
-#### HTML filtering
+### `crawl` options
 
-- `--include`, `-i`: CSS-like selector (#id, .class, tag) to include before Markdown conversion (repeatable). ✅
-- `--exclude`, `-x`: CSS-like selector (#id, .class, tag) to exclude before Markdown conversion (repeatable). 🚫
+**Input / output**
 
-#### Robustness
+| Flag | Description |
+|---|---|
+| `--url`, `-u` | Starting URL |
+| `--urls-file` | File of URLs (one per line); `-` reads stdin |
+| `--output-folder`, `-o` | Output directory (default `./output`) |
+| `--cache-folder`, `-c` | SQLite cache dir (default `~/.cache/crawler-to-md`) |
+| `--base-url`, `-b` | Restrict links to this base (default: URL's base) |
+| `--title`, `-t` | Output title (default: the URL) |
+| `--config` | Path to a `crawler-to-md.toml` (auto-discovered in CWD) |
 
-- `--timeout`: Per-request timeout in seconds (default: `15`). ⏳
-- `--max-retries`: Maximum retries on transient failures — timeouts, 429, 5xx — with exponential backoff (default: `3`). 🔁
-- `--max-pages`: Stop after scraping this many pages (`0` = unlimited). 📏
-- `--max-depth`: Maximum link-discovery depth (`-1` = unlimited). 🌊
-- `--max-time`: Maximum wall-clock crawl time in seconds (`0` = unlimited). ⏰
+**Crawl control**
 
-#### Concurrency
+| Flag | Description |
+|---|---|
+| `--overwrite-cache`, `-w` | Drop the cache DB before scraping |
+| `--exclude-url`, `-e` | Skip URLs containing this string (repeatable) |
+| `--include-url`, `-I` | Keep only URLs containing this string (repeatable) |
+| `--rate-limit`, `-rl` | Max requests/minute (`0` = no limit) |
+| `--delay`, `-d` | Delay between requests, seconds |
+| `--proxy`, `-p` | HTTP or SOCKS proxy URL |
 
-- `--concurrency N`: Number of parallel fetches. `1` (default) uses the synchronous engine; `N > 1` enables the async `httpx` engine with a bounded semaphore. Per-host politeness (rate limit, delay) is preserved in async mode. ⚡
+**HTML filtering**
 
-#### Intelligence
+| Flag | Description |
+|---|---|
+| `--include`, `-i` | CSS-like selector to keep before conversion (repeatable) |
+| `--exclude`, `-x` | CSS-like selector to drop before conversion (repeatable) |
 
-- `--ignore-robots`: Disable robots.txt compliance (robots.txt is **honored by default**). 🤖
-- `--user-agent`: Custom User-Agent string sent on every request. 🪪
-- `--sitemap`: Seed the crawl frontier from the host's `/sitemap.xml` before crawling. 🗺️
-- `--extract {none,readability}`: Content-extraction strategy. `readability` uses trafilatura to strip boilerplate (requires `pip install crawler-to-md[readability]`). Default: `none`. 🧹
-- `--render`: Fetch JS-rendered HTML via Playwright (requires `pip install crawler-to-md[render]` and `playwright install chromium`). Off by default. 🎭
-- `--header "Key: Value"`: Extra request header (repeatable). 📬
-- `--cookie "key=value"`: Request cookie (repeatable). 🍪
-- `--auth user:pass`: HTTP Basic authentication credentials. 🔑
-- `--allow-types application/pdf`: Additional MIME types to ingest via MarkItDown — e.g. `application/pdf`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document` (repeatable). 📎
+**Robustness**
 
-#### Output formats
+| Flag | Description |
+|---|---|
+| `--timeout` | Per-request timeout, seconds (default `15`) |
+| `--max-retries` | Retries on transient failures (default `3`) |
+| `--max-pages` | Stop after N pages (`0` = unlimited) |
+| `--max-depth` | Max link-discovery depth (`-1` = unlimited) |
+| `--max-time` | Max wall-clock time, seconds (`0` = unlimited) |
 
-- `--export-individual`, `-ei`: Export each page as an individual Markdown file. 📝
-- `--frontmatter` / `--no-frontmatter`: Prepend YAML frontmatter (url, title, fetched_at, word_count, token_count) to individual Markdown files. On by default. 🗂️
-- `--no-markdown`: Skip generation of the compiled Markdown file. 🚫
-- `--no-json`: Skip generation of the compiled JSON file. 🚫
-- `--export-jsonl`: Export pages as JSON Lines — one `{url, content, metadata}` record per line. 🗃️
-- `--export-llms`: Export `llms.txt` (page index) and `llms-full.txt` (full content) in the emerging LLM-friendly format. 🤖
-- `--chunk-size N`: Split pages into RAG chunks of `N` tokens (0 = disabled). Requires `pip install crawler-to-md[rag]`. 🧩
-- `--chunk-overlap N`: Token overlap between consecutive chunks (used when `--chunk-size > 0`). 🔗
-- `--export-vectors`: Export pages to a Parquet file for downstream vector indexing. Requires `pip install crawler-to-md[vector]`. 📊
+**Concurrency**
 
-#### Run summary
+| Flag | Description |
+|---|---|
+| `--concurrency N` | `1` = sync engine (default); `N>1` = async `httpx` with a bounded semaphore (politeness preserved) |
 
-Every run prints an end-of-run summary to stdout:
+**Intelligence**
 
-```
-Run summary
-  Links discovered : 142
-  Pages scraped    : 98
-  Pages stored     : 98
-  Content bytes    : 1048576
-  Total tokens     : 210340 (estimated)
-  Duration         : 34.21s
-```
+| Flag | Description |
+|---|---|
+| `--ignore-robots` | Disable robots.txt (honored by default) |
+| `--user-agent` | Custom User-Agent on every request |
+| `--sitemap` | Seed the frontier from the host's `/sitemap.xml` |
+| `--extract {none,readability}` | Content extraction; `readability` needs `[readability]` |
+| `--render` | Fetch JS-rendered HTML; needs `[render]` + `playwright install chromium` |
+| `--header "K: V"` | Extra request header (repeatable) |
+| `--cookie "k=v"` | Request cookie (repeatable) |
+| `--auth user:pass` | HTTP Basic auth |
+| `--allow-types <mime>` | Extra MIME types to ingest via MarkItDown, e.g. `application/pdf` (repeatable) |
 
-Token counts are exact when the `rag` extra is installed (tiktoken), or estimated otherwise.
+**Output formats**
+
+| Flag | Description |
+|---|---|
+| `--export-individual`, `-ei` | One Markdown file per page |
+| `--frontmatter` / `--no-frontmatter` | YAML frontmatter on individual files (on by default) |
+| `--no-markdown` | Skip the compiled Markdown file |
+| `--no-json` | Skip the compiled JSON file |
+| `--export-jsonl` | JSON Lines, one `{url, content, metadata}` per line |
+| `--export-llms` | `llms.txt` (index) + `llms-full.txt` (full content) |
+| `--chunk-size N` | RAG chunks of N tokens (`0` = off); needs `[rag]` |
+| `--chunk-overlap N` | Token overlap between chunks |
+| `--export-vectors` | Parquet export for vector indexing; needs `[vector]` |
+
+Every run prints a summary (links discovered, pages scraped/stored, bytes,
+tokens, duration). Token counts are exact with the `rag` extra, estimated
+otherwise.
 
 ### `export` — re-export without re-crawling
-
-Re-run any combination of export formats from an existing cache database without hitting the network again. Accepts all the same output flags as `crawl`.
 
 ```shell
 crawler-to-md export --url https://docs.example.com \
   --export-llms --export-jsonl --chunk-size 512 --chunk-overlap 64
 ```
 
-### `mcp` — MCP server
-
-Expose crawl tools to AI agents and orchestrators that speak the [Model Context Protocol](https://modelcontextprotocol.io/) over stdio.
+### `mcp` — Model Context Protocol server
 
 ```shell
-# requires the mcp extra
-pip install crawler-to-md[mcp]
-crawler-to-md mcp
+pip install "crawler-to-md[mcp]"
+crawler-to-md mcp        # serves over stdio
 ```
 
-Tools exposed: `crawl` and `fetch_as_markdown`.
+Exposes the tools `crawl` and `fetch_as_markdown` to MCP-speaking agents and
+orchestrators. See **[docs/mcp.md](docs/mcp.md)**.
 
-### 📚 Log level
+---
 
-By default, the `WARN` level is used. Change it with the `LOG_LEVEL` environment variable:
+## 📚 Library API
 
-```shell
-LOG_LEVEL=INFO crawler-to-md --url https://example.com
-```
-
-## 📦 Library API
-
-Use `crawler_to_md` as a library — no CLI side effects, no `sys.argv` parsing.
+`crawler_to_md` is embeddable — no CLI side effects, no `sys.argv` parsing.
 
 ```python
 from crawler_to_md import crawl
@@ -223,67 +255,82 @@ from crawler_to_md import crawl
 result = crawl("https://docs.example.com", max_pages=50, concurrency=4)
 
 for page in result.pages:
-    print(page.url, len(page.content))
+    print(page["url"], len(page["content"]))
 
-print(f"Scraped {result.stats.pages_scraped} pages in {result.stats.duration:.1f}s")
+print(f"{result.stats.pages_scraped} pages in {result.stats.duration:.1f}s")
 ```
 
-`crawl()` returns a `CrawlResult` object with:
+`crawl()` returns a `CrawlResult` (`pages`, `stats`, `exports`). Full reference:
+**[docs/library.md](docs/library.md)**.
 
-- `result.pages` — list of scraped pages (url, content, metadata)
-- `result.stats` — aggregate run statistics (pages scraped, bytes, tokens, duration)
-- `result.exports` — paths of any files written (if export options are passed)
+---
 
-## 🔧 Plugin System
+## 🔧 Plugin system
 
-crawler-to-md exposes an entry-point-based plugin architecture for all four pipeline stages. See **[docs/plugins.md](docs/plugins.md)** for the full reference.
+An entry-point plugin architecture covers all four pipeline stages. Built-in
+output formats ship as first-party formatters wired live through the registry.
 
-### Entry-point groups
-
-| Stage | Group | Protocol method |
+| Stage | Entry-point group | Protocol method |
 |---|---|---|
-| **Formatter** | `crawler_to_md.formatters` | `export(manager, output_path, **options)` |
-| **Filter** | `crawler_to_md.filters` | `is_allowed(url) -> bool` |
-| **Processor** | `crawler_to_md.processors` | `process(html, url) -> str` |
-| **Fetcher** | `crawler_to_md.fetchers` | `fetch(url)` |
+| Formatter | `crawler_to_md.formatters` | `export(manager, output_path, **options)` |
+| Filter | `crawler_to_md.filters` | `is_allowed(url) -> bool` |
+| Processor | `crawler_to_md.processors` | `process(html, url) -> str` |
+| Fetcher | `crawler_to_md.fetchers` | `fetch(url)` |
 
-All built-in output formats ship as first-party formatters (`markdown`, `json`, `jsonl`, `llms`, `individual`, `chunks`, `vectors`) and are wired live through the registry. Register your own by declaring an entry point in your package's `pyproject.toml`:
+Register your own in your package's `pyproject.toml`:
 
 ```toml
 [project.entry-points."crawler_to_md.formatters"]
 my-format = "my_package.exporters:MyFormatter"
 ```
 
-Once your package is installed, the plugin is discovered automatically. See `tests/sample_plugin.py` for a worked end-to-end example.
+Full guide: **[docs/plugins.md](docs/plugins.md)**.
 
-> **Note**: The filter, processor, and fetcher plugin protocols and registries are defined and tested, but are not yet consumed by the crawl loop — see [Known Limitations](#-known-limitations--follow-ups).
+---
 
-## 🐳 Docker Support
-
-Run with Docker:
+## 🐳 Docker
 
 ```shell
+# Run the published image
 docker run --rm \
-  -v $(pwd)/output:/app/output \
-  -v cache:/home/app/.cache/crawler-to-md \
-  ghcr.io/obeone/crawler-to-md --url <URL>
-```
+  -v "$(pwd)/output:/app/output" \
+  -v crawler-cache:/home/app/.cache/crawler-to-md \
+  ghcr.io/obeone/crawler-to-md --url https://example.com
 
-Build from source:
-
-```shell
+# Build from source
 docker build -t crawler-to-md .
-
-docker run --rm \
-  -v $(pwd)/output:/app/output \
-  crawler-to-md --url <URL>
+docker run --rm -v "$(pwd)/output:/app/output" crawler-to-md --url https://example.com
 ```
 
-## ⚠️ Known Limitations / Follow-ups
+---
 
-- **Filter/processor/fetcher plugin protocols** are fully defined and tested but are not yet consumed by the crawl loop. Formatters are wired live; the other three stages are available for extension and will be integrated in a future release.
-- **Sitemap parsing** uses the stdlib `xml.etree.ElementTree`. For untrusted or adversarially crafted sitemaps, consider using `defusedxml` as a drop-in replacement to guard against XML DoS attacks (billion-laughs).
+## 🧪 Development
+
+```shell
+uv pip install -e ".[dev]"   # editable install with dev tools
+uv run --extra dev pytest    # run the test suite
+uv run --extra dev ruff check .   # lint
+```
+
+See **[docs/](docs/)** for deeper guides (configuration, library, MCP, plugins).
+
+---
+
+## ⚠️ Known limitations
+
+- The **filter/processor/fetcher** plugin protocols are defined and tested but
+  not yet consumed by the crawl loop (formatters are live); integration is
+  planned.
+- **Sitemap parsing** uses the stdlib `xml.etree.ElementTree`. For untrusted
+  sitemaps, consider `defusedxml` to guard against XML-expansion DoS.
+
+---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Feel free to submit pull requests or open issues. 🌟
+Issues and pull requests are welcome. Run the test suite and `ruff` before
+submitting.
+
+## 📝 License
+
+[MIT](LICENSE) © Grégoire Compagnon ([obeone](https://github.com/obeone))
