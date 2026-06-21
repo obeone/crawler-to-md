@@ -3,7 +3,7 @@
 # ==============================================================================
 # Base Stage: Installs uv and creates a non-root user for security
 # ==============================================================================
-FROM python:3.13-slim AS base
+FROM python:3.14-slim AS base
 
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
