@@ -103,6 +103,13 @@ def main():
         default=0,
     )
     parser.add_argument(
+        "--timeout",
+        "-T",
+        type=int,
+        help="Request timeout in seconds",
+        default=None,
+    )
+    parser.add_argument(
         "--proxy",
         "-p",
         help="Proxy URL for HTTP or SOCKS requests",
@@ -224,6 +231,7 @@ def main():
             proxy=args.proxy,
             include_filters=args.include,
             exclude_filters=args.exclude,
+            timeout=args.timeout,
         )
     except ValueError as exc:
         parser.error(str(exc))

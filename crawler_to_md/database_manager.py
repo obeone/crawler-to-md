@@ -31,7 +31,8 @@ class DatabaseManager:
             self.conn.execute(
                 """CREATE TABLE IF NOT EXISTS links (
                           url TEXT PRIMARY KEY,
-                          visited BOOLEAN)"""
+                          visited BOOLEAN,
+                          scraped BOOLEAN DEFAULT FALSE)"""
             )
 
     def insert_page(self, url, content, metadata):
@@ -129,6 +130,19 @@ class DatabaseManager:
                 "SELECT COUNT(*) FROM links WHERE visited = TRUE"
             )
             return cursor.fetchone()[0]
+
+    def mark_link_scraped(self, url):
+        """
+        Mark a link as successfully scraped in the 'links' table.
+
+        Args:
+        url (str): The URL of the link to mark as scraped.
+        """
+        with self.conn:
+            logger.debug(f"Marking link as scraped with URL: {url}")
+            self.conn.execute(
+                "UPDATE links SET scraped = TRUE WHERE url = ?", (url,)
+            )
 
     def get_all_pages(self):
         """

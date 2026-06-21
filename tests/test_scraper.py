@@ -24,6 +24,9 @@ class DummyDB(DatabaseManager):
     def mark_link_visited(self, url):
         pass
 
+    def mark_link_scraped(self, url):
+        pass
+
 
 def test_is_valid_link():
     db = DummyDB()
@@ -192,6 +195,7 @@ class ListDB(DummyDB):
     def __init__(self):
         self.links = []
         self.visited = set()
+        self.scraped = set()
         self.pages = []
 
     def insert_link(self, url, visited=False):
@@ -208,6 +212,9 @@ class ListDB(DummyDB):
 
     def mark_link_visited(self, url):
         self.visited.add(url)
+
+    def mark_link_scraped(self, url):
+        self.scraped.add(url)
 
     def get_links_count(self):
         return len(self.links)
@@ -242,7 +249,7 @@ def test_start_scraping_process(monkeypatch):
         content = b'<html></html>'
         text = '<html></html>'
 
-    monkeypatch.setattr(scraper.session, 'get', lambda url: DummyResp())
+    monkeypatch.setattr(scraper.session, 'get', lambda url, **kw: DummyResp())
 
     class DummyTqdm:
         def __init__(self, *a, **k):
@@ -252,6 +259,12 @@ def test_start_scraping_process(monkeypatch):
         def refresh(self):
             pass
         def close(self):
+            pass
+        def set_postfix(self, *a, **k):
+            pass
+        def set_postfix_str(self, *a, **k):
+            pass
+        def set_description_str(self, *a, **k):
             pass
 
     monkeypatch.setattr(tqdm, 'tqdm', lambda *a, **k: DummyTqdm(*a, **k))
@@ -346,7 +359,7 @@ def test_start_scraping_excludes_invalid_urls(monkeypatch):
         content = b'<html></html>'
         text = '<html></html>'
 
-    monkeypatch.setattr(scraper.session, 'get', lambda url: DummyResp())
+    monkeypatch.setattr(scraper.session, 'get', lambda url, **kw: DummyResp())
 
     class DummyTqdm:
         def __init__(self, *a, **k):
@@ -356,6 +369,12 @@ def test_start_scraping_excludes_invalid_urls(monkeypatch):
         def refresh(self):
             pass
         def close(self):
+            pass
+        def set_postfix(self, *a, **k):
+            pass
+        def set_postfix_str(self, *a, **k):
+            pass
+        def set_description_str(self, *a, **k):
             pass
 
     monkeypatch.setattr(tqdm, 'tqdm', lambda *a, **k: DummyTqdm(*a, **k))
@@ -393,7 +412,7 @@ def test_start_scraping_filters_discovered_links(monkeypatch):
         headers = {'content-type': 'text/html'}
         text = html
 
-    monkeypatch.setattr(scraper.session, 'get', lambda url: DummyResp())
+    monkeypatch.setattr(scraper.session, 'get', lambda url, **kw: DummyResp())
 
     monkeypatch.setattr(
         Scraper, 'scrape_page', lambda self, html, url: ('# MD', {'url': url})
@@ -407,6 +426,12 @@ def test_start_scraping_filters_discovered_links(monkeypatch):
         def refresh(self):
             pass
         def close(self):
+            pass
+        def set_postfix(self, *a, **k):
+            pass
+        def set_postfix_str(self, *a, **k):
+            pass
+        def set_description_str(self, *a, **k):
             pass
 
     monkeypatch.setattr(tqdm, 'tqdm', lambda *a, **k: DummyTqdm(*a, **k))
