@@ -57,6 +57,15 @@ class Scraper:
         self.rate_limit = rate_limit
         self.delay = delay
         self.session = requests.Session()
+        self.session.headers.update({
+            "Accept-Encoding": "identity",
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Referer": base_url or "",
+        })
         if proxy:
             self.session.proxies.update({"http": proxy, "https": proxy})
         self.proxy = proxy
@@ -268,6 +277,9 @@ class Scraper:
             # Insert the validated list of URLs into the database
             self.db_manager.insert_link(validated_urls)
         elif url:
+            # Reset the starting URL to unvisited if it was previously visited
+            # but produced no page content (recovers from broken cache states).
+            self.db_manager.reset_if_no_content(url)
             # Insert a single URL if provided and valid
             self.db_manager.insert_link(url)
 

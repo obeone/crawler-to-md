@@ -130,6 +130,25 @@ class DatabaseManager:
             )
             return cursor.fetchone()[0]
 
+    def reset_if_no_content(self, url):
+        """
+        Reset a link's visited status to False if it has no corresponding page content.
+        This recovers from broken cache states where a URL was marked visited
+        but was never successfully scraped.
+
+        Args:
+        url (str): The URL of the link to check and potentially reset.
+        """
+        with self.conn:
+            self.conn.execute(
+                """UPDATE links SET visited = FALSE
+                   WHERE url = ? AND NOT EXISTS (
+                       SELECT 1 FROM pages WHERE pages.url = ? AND pages.content IS NOT NULL
+                   )""",
+                (url, url),
+            )
+
+
     def get_all_pages(self):
         """
         Retrieve all pages from the 'pages' table.
