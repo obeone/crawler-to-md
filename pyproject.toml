@@ -22,7 +22,7 @@ classifiers = [
 
 # Project dependencies with exact versions for reproducibility
 dependencies = [
-    "mdformat==0.7.22",
+    "mdformat==1.0.0",
     "mdformat-gfm==1.0.0",
     "mdformat_footnote==0.1.1",
     "mdformat_frontmatter==2.0.8",
